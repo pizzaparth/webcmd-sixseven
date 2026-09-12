@@ -11,6 +11,10 @@
 > (`node web/server.js`) and reads that JSON file. The same flow is also
 > exposed over **WhatsApp** (Meta Cloud API webhook at
 > `/webhooks/whatsapp`, see [`travel-agent/WHATSAPP.md`](travel-agent/WHATSAPP.md)).
+> Searches can be started from the website itself, and payment runs through
+> **Razorpay** (test mode by default, see
+> [`travel-agent/PAYMENTS.md`](travel-agent/PAYMENTS.md)) with the dummy
+> widget below kept as the no-keys fallback.
 
 ## The Idea
 

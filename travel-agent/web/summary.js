@@ -67,11 +67,11 @@ export function renderSummaryPage(trip, { mode = 'server', picks = {}, confirmat
 
   <section class="section">
     <div class="section-head">
-      <h2>Dummy payment</h2>
+      <h2>Payment</h2>
       <span class="meta" data-confirm-meta></span>
     </div>
     <div class="card" data-confirm-card>
-      <div class="small muted" data-confirm-empty>No dummy payment yet — <a href="${esc(links.checkout)}">go to details &amp; payment</a>.</div>
+      <div class="small muted" data-confirm-empty>No payment yet — <a href="${esc(links.checkout)}">go to details &amp; payment</a>.</div>
       <dl class="kv" data-confirm-body hidden></dl>
     </div>
   </section>
@@ -111,6 +111,7 @@ export function renderSummaryPage(trip, { mode = 'server', picks = {}, confirmat
 
   <section class="section">
     <div class="row">
+      <button type="button" class="btn" data-open-all ${searchTabs.some((t) => t.url) ? '' : 'disabled'}>Open all links</button>
       <a class="btn secondary" href="${esc(links.compare)}">Back to compare</a>
       <a class="btn secondary" href="${esc(links.checkout)}">Details &amp; payment</a>
     </div>
@@ -143,21 +144,30 @@ export function renderSummaryPage(trip, { mode = 'server', picks = {}, confirmat
     $('[data-picks-total]').textContent = priced ? fmt(total, cur) : '—';
   }
 
+  var openAll = $('[data-open-all]');
+  if (openAll) openAll.addEventListener('click', function () {
+    var urls = {};
+    Object.keys(picks).forEach(function (k) { if (picks[k].url) urls[picks[k].url] = 1; });
+    ${jsonScript(searchTabs.map((t) => t.url).filter(Boolean))}.forEach(function (u) { urls[u] = 1; });
+    Object.keys(urls).forEach(function (u) { window.open(u, '_blank', 'noopener'); });
+  });
+
   var c = SERVER_CONFIRMATION || read('travel-confirmation');
   if (c) {
     var dl = $('[data-confirm-body]');
-    [['Payment id', c.paymentId], ['Order id', c.orderId], ['Amount', fmt(c.amount, c.currency)], ['Method', c.method],
-     ['Traveler', c.traveler + ' (' + c.travelers + ' traveler' + (c.travelers === 1 ? '' : 's') + ')'],
+    var isDummy = c.dummy !== false;
+    [['Payment id', c.paymentId], ['Order id', c.orderId || '\\u2014'], ['Amount', fmt(c.amount, c.currency)], ['Method', c.method],
+     ['Traveler', c.traveler + ' (' + c.travelers + ' traveler' + (c.travelers === 1 ? '' : 's') + ')' + (c.email ? ' \\u00b7 ' + c.email : '') + (c.phone ? ' \\u00b7 ' + c.phone : '')],
      ['Trip', c.destination + (c.startDate ? ', ' + c.startDate + (c.endDate ? ' \\u2013 ' + c.endDate : '') : '')],
      ['Confirmed at', new Date(c.confirmedAt).toLocaleString('en-IN')],
-     ['Status', 'DUMMY \\u2014 no real payment was made']].forEach(function (r) {
+     ['Status', isDummy ? 'DUMMY \\u2014 no real payment was made' : c.test ? 'Razorpay TEST mode \\u2014 no real money moved' : 'Paid via Razorpay (' + (c.status || 'captured') + ')']].forEach(function (r) {
       var dt = document.createElement('dt'); dt.textContent = r[0];
       var dd = document.createElement('dd'); dd.textContent = r[1];
       dl.appendChild(dt); dl.appendChild(dd);
     });
     $('[data-confirm-empty]').hidden = true; dl.hidden = false;
     $('[data-confirm-card]').classList.add('confirm');
-    $('[data-confirm-meta]').innerHTML = '<span class="badge ok">Fake confirmation</span>';
+    $('[data-confirm-meta]').innerHTML = isDummy ? '<span class="badge ok">Fake confirmation</span>' : c.test ? '<span class="badge info">Razorpay test</span>' : '<span class="badge ok">Paid</span>';
   }
 })();
 `;

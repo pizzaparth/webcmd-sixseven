@@ -225,7 +225,11 @@ Type *help* any time, *reset* to start over.`;
  *   links: { compare: string, checkout: string, summary: string },
  *   onPick?: (category, pick) => void,
  *   onConfirm?: (confirmation) => void,
+ *   payments?: null | { test: boolean, createLink(args) => Promise<link>, checkLink(linkId) => Promise<{paid, confirmation?, status?}> },
  * }} deps
+ *   With `payments` set, the pay step sends a Razorpay Payment Link (hosted
+ *   page, test or live per the keys) instead of simulating; without it the
+ *   original one-tap dummy payment is used.
  */
 export function createWhatsAppBot(deps) {
   const sessions = new Map(); // wa_id -> { state, intent, trip, picks, name, travelers, confirmation, waName }
@@ -294,7 +298,12 @@ export function createWhatsAppBot(deps) {
       return;
     }
     s.state = 'details_name';
-    await send.text(to, `Almost there. This is a *dummy* checkout — no real payment.\n\nWhat name should the booking be under?${s.waName ? ` (Reply *same* for "${s.waName}")` : ''}`);
+    const intro = deps.payments
+      ? deps.payments.test
+        ? 'Almost there. Payment is via a Razorpay link in *test mode* — no real money.'
+        : 'Almost there. Payment is via a secure Razorpay link.'
+      : 'Almost there. This is a *dummy* checkout — no real payment.';
+    await send.text(to, `${intro}\n\nWhat name should the booking be under?${s.waName ? ` (Reply *same* for "${s.waName}")` : ''}`);
   }
 
   async function finishPayment(to, s) {
@@ -321,6 +330,66 @@ export function createWhatsAppBot(deps) {
     await send.buttons(
       to,
       `🎉 *Dummy payment confirmed*\nPayment id: ${confirmation.paymentId}\nAmount: ${formatPrice(amount, 'INR')}\nTraveler: ${s.name} (${s.travelers})\n\n*Your tabs*\n${tabs}\n\nSummary page: ${deps.links.summary}\n\n_No money moved and nothing was booked — this is a demo._`,
+      [{ id: 'reset', title: 'New trip' }],
+    );
+  }
+
+  // ---- Razorpay Payment Links (when deps.payments is configured) ----
+  async function sendPaymentLink(to, s, amount) {
+    if (amount < 1) {
+      await send.text(to, 'None of your picks has a captured price, so there is nothing to charge — type *choose* to pick a priced option.');
+      return;
+    }
+    const link = await deps.payments.createLink({
+      from: to,
+      amount,
+      description: `Travel Concierge — ${s.intent.destination}${s.intent.startDate ? ` ${s.intent.startDate}` : ''} (${Object.keys(s.picks).length} pick${Object.keys(s.picks).length === 1 ? '' : 's'})`,
+      customer: { name: s.name, contact: `+${to}` },
+      referenceId: `wa-${to}-${Date.now()}`,
+    });
+    s.paymentLinkId = link.id;
+    s.paymentAmount = amount;
+    await send.buttons(
+      to,
+      `🧾 *Pay ${formatPrice(amount, 'INR')}*${deps.payments.test ? ' _(Razorpay test mode — no real money)_' : ''}\n${picksSummary(s)}\nName: ${s.name} · ${s.travelers} traveler${s.travelers === 1 ? '' : 's'}\n\nPay securely on Razorpay:\n${link.short_url}${
+        deps.payments.test ? '\n\nTest card: 4111 1111 1111 1111, any future expiry, any CVV · Test UPI: success@razorpay' : ''
+      }\n\nI’ll confirm here automatically once it goes through, or tap *I’ve paid*.`,
+      [
+        { id: 'pay_check', title: "I've paid" },
+        { id: 'choose', title: 'Change picks' },
+      ],
+    );
+  }
+
+  async function checkPaymentLink(to, s) {
+    if (!s.paymentLinkId) {
+      await send.text(to, 'No payment link yet — type *checkout* to start.');
+      return;
+    }
+    const result = await deps.payments.checkLink(s.paymentLinkId);
+    if (result.paid) {
+      await paymentCompleted(to, result.confirmation);
+      return;
+    }
+    await send.buttons(to, `Razorpay says the link is *${result.status}* — not paid yet. Finish the payment and tap again.`, [
+      { id: 'pay_check', title: "I've paid" },
+      { id: 'pay_resend', title: 'Resend link' },
+    ]);
+  }
+
+  /** Called by the server when a Razorpay Payment Link is paid (callback or webhook), or by checkPaymentLink. */
+  async function paymentCompleted(to, confirmation) {
+    const s = session(to);
+    if (s.state === 'done' && s.confirmation?.paymentId === confirmation.paymentId) return; // already announced
+    s.confirmation = { ...confirmation, traveler: confirmation.traveler || s.name || s.waName || '', travelers: s.travelers || confirmation.travelers };
+    s.state = 'done';
+    deps.onConfirm?.(s.confirmation);
+    const tabs = Object.entries(s.picks).map(([c, p]) => `• ${CATEGORY_LABEL[c] || c}: ${p.platform}\n   ${p.url}`).join('\n') || '• (no picks recorded)';
+    await send.buttons(
+      to,
+      `🎉 *Payment received${confirmation.test ? ' (Razorpay test mode)' : ''}*\nPayment id: ${confirmation.paymentId}\nAmount: ${formatPrice(confirmation.amount, confirmation.currency || 'INR')}\nMethod: ${confirmation.method}\n\n*Your tabs*\n${tabs}\n\nSummary page: ${deps.links.summary}${
+        confirmation.test ? '\n\n_Test mode: no real money moved._' : ''
+      }`,
       [{ id: 'reset', title: 'New trip' }],
     );
   }
@@ -439,6 +508,10 @@ export function createWhatsAppBot(deps) {
         s.state = 'pay';
         let amount = 0;
         for (const p of Object.values(s.picks)) if (p.price != null) amount += p.price;
+        if (deps.payments) {
+          await sendPaymentLink(from, s, amount);
+          return;
+        }
         await send.buttons(
           from,
           `🧾 *Dummy payment*\n${picksSummary(s)}\nName: ${s.name} · ${n} traveler${n === 1 ? '' : 's'}\n\nTap Pay to *simulate* a payment of ${formatPrice(amount, 'INR')}. No card details are needed and no money moves.`,
@@ -450,6 +523,20 @@ export function createWhatsAppBot(deps) {
         return;
       }
       case 'pay': {
+        if (deps.payments) {
+          if (actionId === 'pay_check' || /^(paid|done|i have paid|i've paid|check)$/.test(lower)) {
+            await checkPaymentLink(from, s);
+            return;
+          }
+          if (actionId === 'pay_resend' || lower === 'link') {
+            let amount = 0;
+            for (const p of Object.values(s.picks)) if (p.price != null) amount += p.price;
+            await sendPaymentLink(from, s, amount);
+            return;
+          }
+          await send.text(from, `Open the payment link to pay${deps.payments.test ? ' (test mode — use card 4111 1111 1111 1111 or UPI success@razorpay)' : ''}, then tap *I've paid*. Type *choose* to change picks.`);
+          return;
+        }
         if (actionId === 'pay_confirm' || /^(pay|yes|confirm)$/.test(lower)) {
           await finishPayment(from, s);
           return;
@@ -531,5 +618,5 @@ export function createWhatsAppBot(deps) {
     }
   }
 
-  return { verify, receive, sessions };
+  return { verify, receive, sessions, paymentCompleted };
 }

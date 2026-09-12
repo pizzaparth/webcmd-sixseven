@@ -194,16 +194,67 @@ function renderBanner(trip) {
  *   mode 'server' → choose buttons POST /api/choose (webcmd opens the tab);
  *   mode 'static' → choose buttons open the URL in a new browser tab directly.
  */
-export function renderComparisonPage(trip, { mode = 'server', sourceLabel = '', links = DEFAULT_LINKS } = {}) {
+/**
+ * `trips` (server mode): [{name, isSample, current}] for the trip switcher.
+ * `search` (server mode): { available, mode, job } — whether the site can
+ * start a new agent run, and the state of the current/last run.
+ */
+export function renderComparisonPage(trip, { mode = 'server', sourceLabel = '', links = DEFAULT_LINKS, trips = [], search = null } = {}) {
   const groups = groupByCategory(trip.results);
   const summary = tripSummary(trip.intent);
   const resultsById = {};
   for (const r of trip.results || []) resultsById[`${r.category}:${r.platformId}`] = { url: r.url, platform: r.platform, price: r.pick?.price ?? null, currency: r.pick?.currency || 'INR' };
 
+  const job = search?.job || { state: 'idle' };
+  const searchPanel =
+    mode === 'server'
+      ? `
+  <section class="card" style="margin-top:16px" data-search-panel>
+    <div class="row between">
+      <div class="row">
+        <h2>New search</h2>
+        ${search?.available ? badge(`agent: ${search.mode}`, 'info') : badge('agent unavailable', 'bad')}
+      </div>
+      <div class="row">
+        ${trips.length > 1 ? `<label class="small muted" for="tripSelect">Trip file</label>
+        <select id="tripSelect" data-trip-select style="width:auto">${trips.map((t) => `<option value="${esc(t.name)}" ${t.current ? 'selected' : ''}>${esc(t.name)}${t.isSample ? ' (sample)' : ''}</option>`).join('')}</select>` : ''}
+        ${button('Show form', { secondary: true, attrs: 'data-search-toggle' })}
+      </div>
+    </div>
+    <div data-search-form hidden style="margin-top:12px">
+      ${
+        search?.available
+          ? ''
+          : '<div class="notice" style="margin-bottom:12px">No search engine on this machine — install <span class="mono">webcmd</span> (and the <span class="mono">claude</span> CLI for the adaptive agent), or run <span class="mono">node src/index.js …</span> from a terminal and pick the new file above.</div>'
+      }
+      <div class="field">
+        <label for="searchText">Describe the trip</label>
+        <input id="searchText" placeholder='Trip to Goa from Mumbai, 12 Oct to 15 Oct, 2 travelers, budget 30000' value="${esc(trip.intent?.raw || '')}">
+      </div>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="field"><label for="sFrom">From</label><input id="sFrom" placeholder="Mumbai" value="${esc(trip.intent?.origin || '')}"></div>
+        <div class="field"><label for="sTo">To</label><input id="sTo" placeholder="Goa" value="${esc(trip.intent?.destination || '')}"></div>
+        <div class="field"><label for="sStart">Start date</label><input id="sStart" type="date" value="${esc(trip.intent?.startDate || '')}"></div>
+        <div class="field"><label for="sEnd">End date</label><input id="sEnd" type="date" value="${esc(trip.intent?.endDate || '')}"></div>
+        <div class="field"><label for="sTravelers">Travelers</label><input id="sTravelers" type="number" min="1" max="20" value="${esc(trip.intent?.travelers || 1)}"></div>
+        <div class="field"><label for="sBudget">Budget (₹)</label><input id="sBudget" type="number" min="0" value="${esc(trip.intent?.budget ?? '')}"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        ${button('Search real sites', { attrs: 'data-search-start', disabled: !search?.available })}
+        ${button('Stop search', { secondary: true, attrs: 'data-search-stop hidden' })}
+        <span class="small muted">Runs the agent (a few minutes). Explicit fields win over the description.</span>
+      </div>
+      <div class="status" data-search-status></div>
+      <div class="log" data-search-log hidden></div>
+    </div>
+  </section>`
+      : '';
+
   const body = `
   <h1>Compare &amp; choose</h1>
   <p class="sub">${esc(summary || 'Trip')}${sourceLabel ? ` · <span class="mono">${esc(sourceLabel)}</span>` : ''}</p>
   ${renderBanner(trip)}
+  ${searchPanel}
   ${sourceLabel.includes('sample') ? `<div class="notice" style="margin-top:12px">Showing bundled sample data — run the agent (<span class="mono">node src/index.js ...</span>) to generate a real trip file.</div>` : ''}
   ${groups.length ? groups.map(([c, rows]) => renderCategory(c, rows)).join('') : '<div class="notice" style="margin-top:20px">No results in this trip file.</div>'}
   ${renderPlaces(trip.places)}
@@ -361,6 +412,89 @@ export function renderComparisonPage(trip, { mode = 'server', sourceLabel = '', 
     btn.addEventListener('click', function () { choose(btn); });
   });
   renderPicks();
+
+  // ---- new search / trip switcher (server mode only) --------------------
+  var INITIAL_JOB = ${jsonScript(job)};
+  var panel = document.querySelector('[data-search-panel]');
+  if (panel) {
+    var form = panel.querySelector('[data-search-form]');
+    var toggle = panel.querySelector('[data-search-toggle]');
+    var statusEl = panel.querySelector('[data-search-status]');
+    var logEl = panel.querySelector('[data-search-log]');
+    var startBtn = panel.querySelector('[data-search-start]');
+    var stopBtn = panel.querySelector('[data-search-stop]');
+    stopBtn.addEventListener('click', async function () {
+      stopBtn.disabled = true;
+      try { await fetch('/api/search/stop', { method: 'POST' }); } catch (e) {}
+      stopBtn.disabled = false;
+    });
+    function showForm(show) { form.hidden = !show; toggle.textContent = show ? 'Hide form' : 'Show form'; }
+    toggle.addEventListener('click', function () { showForm(form.hidden); });
+
+    var sel = panel.querySelector('[data-trip-select]');
+    if (sel) sel.addEventListener('change', function () { window.location.href = '/?trip=' + encodeURIComponent(sel.value); });
+
+    var polling = null;
+    function renderJob(j) {
+      if (!j || j.state === 'idle') { statusEl.textContent = ''; statusEl.className = 'status'; logEl.hidden = true; return; }
+      logEl.hidden = false;
+      logEl.textContent = (j.log || []).join('\\n');
+      logEl.scrollTop = logEl.scrollHeight;
+      stopBtn.hidden = j.state !== 'running';
+      if (j.state === 'running') {
+        statusEl.className = 'status';
+        statusEl.textContent = 'Searching ' + (j.intent && j.intent.destination ? j.intent.destination : '') + ' with the ' + j.mode + ' agent\u2026 started ' + new Date(j.startedAt).toLocaleTimeString();
+        startBtn.disabled = true;
+      } else if (j.state === 'done') {
+        statusEl.className = 'status ok';
+        statusEl.textContent = 'Search finished \u2014 loading results\u2026';
+        if (polling) { clearInterval(polling); polling = null; }
+        if (INITIAL_JOB.state === 'running' || startBtn.dataset.started) setTimeout(function () { window.location.href = '/'; }, 800);
+        else startBtn.disabled = false;
+      } else if (j.state === 'error') {
+        statusEl.className = 'status bad';
+        statusEl.textContent = 'Search failed: ' + (j.error || 'unknown error');
+        if (polling) { clearInterval(polling); polling = null; }
+        startBtn.disabled = false;
+      }
+    }
+    async function poll() {
+      try {
+        var res = await fetch('/api/search/status');
+        var data = await res.json();
+        renderJob(data.job);
+      } catch (e) { /* server restarting? keep trying */ }
+    }
+    function startPolling() { if (!polling) polling = setInterval(poll, 2500); }
+
+    if (INITIAL_JOB.state === 'running') { showForm(true); renderJob(INITIAL_JOB); startPolling(); }
+    else if (INITIAL_JOB.state === 'error') { showForm(true); renderJob(INITIAL_JOB); }
+
+    startBtn.addEventListener('click', async function () {
+      var body = {
+        text: document.getElementById('searchText').value.trim(),
+        origin: document.getElementById('sFrom').value.trim(),
+        destination: document.getElementById('sTo').value.trim(),
+        startDate: document.getElementById('sStart').value,
+        endDate: document.getElementById('sEnd').value,
+        travelers: document.getElementById('sTravelers').value,
+        budget: document.getElementById('sBudget').value,
+      };
+      if (!body.text && !body.destination) { statusEl.className = 'status bad'; statusEl.textContent = 'Give a destination or a description.'; return; }
+      // Explicit fields win: send text only when no destination was typed.
+      if (body.destination) delete body.text;
+      startBtn.disabled = true; startBtn.dataset.started = '1';
+      statusEl.className = 'status'; statusEl.textContent = 'Starting\u2026';
+      try {
+        var res = await fetch('/api/search', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        var data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        renderJob(data.job); startPolling();
+      } catch (err) {
+        statusEl.className = 'status bad'; statusEl.textContent = 'Could not start: ' + err.message; startBtn.disabled = false;
+      }
+    });
+  }
 })();
 `;
 

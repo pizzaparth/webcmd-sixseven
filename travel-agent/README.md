@@ -412,9 +412,10 @@ What the page does:
 The same flow over WhatsApp via the Meta Cloud API: describe a trip →
 comparison as a message + "Choose" list → pick per category (each pick
 replies with the link) → dummy checkout with one *Pay (dummy)* tap. Picks
-and the fake confirmation mirror into the website's summary page. Setup
-(Meta app, your number, tunnel, webhook, free-tier notes):
-**[WHATSAPP.md](WHATSAPP.md)**. Needs `WHATSAPP_TOKEN`,
+and the confirmation mirror into the website's summary page. With Razorpay
+keys the pay step sends a Razorpay **Payment Link** instead of simulating
+(PAYMENTS.md §4). Setup (Meta app, your number, tunnel, webhook, free-tier
+notes): **[WHATSAPP.md](WHATSAPP.md)**. Needs `WHATSAPP_TOKEN`,
 `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` in `.env`.
 
 ### Shared design template (`web/template.js`)
@@ -428,7 +429,29 @@ existing classes (`.card`, `.badge.ok|warn|bad|info|neutral|accent`,
 `.btn[.secondary][.block]`, `.banner`, `.grid`, `.field`, `.tabs`, `.kv`,
 `.notice`, `.status`, `.table-wrap`) and pass it to `renderPage()`.
 
-### Details + dummy payment page (`/checkout`, `web/checkout.js`)
+### Searching from the website
+
+The comparison page has a **New search** panel: describe the trip (or fill
+From/To/dates/travelers/budget) and hit *Search real sites*. The server
+spawns the agent as a child process — `src/run-agent.js` (Claude-driven)
+when the `claude` CLI and webcmd are installed, else `src/index.js` (the
+webcmd script) — streams its log into the page, and switches the site to
+the new `output/<trip>.json` when it finishes. `SEARCH_MODE=claude|script`
+forces one; `--no-open` disables searching. A **Trip file** dropdown
+switches between previous runs (and the bundled sample). The WhatsApp bot
+uses the same runner.
+
+### Details + payment page (`/checkout`, `web/checkout.js`)
+
+Payments go through **Razorpay** when `RAZORPAY_KEY_ID`/`SECRET` are in
+`.env` (test keys → test mode, no real money; see
+**[PAYMENTS.md](PAYMENTS.md)** for keys, test cards, webhook), and fall
+back to the dummy widget below when they aren't. With Razorpay the page
+creates an order server-side for the picks' total, opens Razorpay's
+Checkout modal, verifies the payment signature on the server, and shows the
+confirmation — card/UPI details never touch this site.
+
+#### Dummy mode (no keys)
 
 One screen: the trip-details form (name, email, phone, travelers, dates,
 requests — pre-filled from the trip intent where known) next to a

@@ -52,8 +52,11 @@ function field({ id, label, type = 'text', placeholder = '', value = '', span2 =
  * cloud engines are configured; the page offers a Browser/Cloud picker when
  * any are. Static builds always use the browser engine.
  */
-export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = DEFAULT_LINKS, voice = null } = {}) {
+export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = DEFAULT_LINKS, voice = null, payments = null } = {}) {
   const voiceConfig = voice || { stt: null, tts: null, llm: null, cloud: false };
+  // payments: { provider: 'razorpay', keyId, test } (server mode with keys) or { provider: 'dummy' }
+  const pay = mode === 'server' && payments?.provider === 'razorpay' ? payments : { provider: 'dummy', keyId: null, test: false };
+  const razorpay = pay.provider === 'razorpay';
   const intent = trip.intent || {};
   const fallbackTotal = bestTotal(trip.results || []);
   const currency = fallbackTotal.currency || intent.currency || 'INR';
@@ -61,11 +64,17 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
 
   const body = `
   <h1>Trip details &amp; payment</h1>
-  <p class="sub">${esc(route)} · This is a dummy checkout: nothing here is sent to any real site or gateway.</p>
+  <p class="sub">${esc(route)} · ${razorpay ? `Payment via Razorpay${pay.test ? ' (test mode)' : ''}.` : 'This is a dummy checkout: nothing here is sent to any real site or gateway.'}</p>
 
   <div class="notice">
-    <strong>Demo only.</strong> Use obviously-fake test values (the "Fill test values" button has some).
-    Inputs live in this tab for the run and are discarded when it closes — no card or personal data is stored anywhere.
+    ${
+      razorpay
+        ? pay.test
+          ? `<strong>Razorpay test mode.</strong> Payment happens in Razorpay's own checkout with <em>test</em> keys — no real money. Use a test card like <span class="mono">4111 1111 1111 1111</span> (any future expiry, any CVV) or UPI <span class="mono">success@razorpay</span>. Card details never touch this site.`
+          : `<strong>Razorpay live mode.</strong> This checkout charges real money. Card/UPI details are entered in Razorpay's secure checkout and never touch this site.`
+        : `<strong>Demo only.</strong> Use obviously-fake test values (the "Fill test values" button has some).
+    Inputs live in this tab for the run and are discarded when it closes — no card or personal data is stored anywhere.`
+    }
   </div>
 
   <div class="two-col" style="margin-top:16px" data-checkout>
@@ -112,14 +121,15 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
     <section class="card" data-payment>
       <div class="row between" style="margin-bottom:6px">
         <h2>Payment</h2>
-        <span class="badge warn">Dummy widget</span>
+        ${razorpay ? (pay.test ? '<span class="badge info">Razorpay · test mode</span>' : '<span class="badge bad">Razorpay · LIVE</span>') : '<span class="badge warn">Dummy widget</span>'}
       </div>
-      <div class="small muted">Razorpay-style, but not Razorpay: no SDK, no network, no real gateway.</div>
+      <div class="small muted">${razorpay ? 'Razorpay Checkout opens in a secure modal. Cards, UPI, netbanking and wallets are handled there.' : 'Razorpay-style, but not Razorpay: no SDK, no network, no real gateway.'}</div>
       <div class="price" style="margin:12px 0 2px">
         <span data-amount>${esc(formatPrice(fallbackTotal.total, currency) || '—')}</span>
       </div>
       <div class="small muted" data-amount-note>Best total from search snapshot</div>
 
+      <div data-dummy-widget ${razorpay ? 'hidden' : ''}>
       <div class="tabs" style="margin-top:14px" role="tablist">
         <button type="button" class="tab active" data-tab="card" role="tab">Card</button>
         <button type="button" class="tab" data-tab="upi" role="tab">UPI</button>
@@ -139,18 +149,25 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
         </div>
       </div>
 
+      </div>
+
       <div style="margin-top:16px">
-        ${button('Pay (dummy)', { block: true, attrs: 'data-pay' })}
+        ${razorpay ? button(`Pay with Razorpay${pay.test ? ' (test)' : ''}`, { block: true, attrs: 'data-pay' }) : button('Pay (dummy)', { block: true, attrs: 'data-pay' })}
         <div class="status" data-pay-status></div>
       </div>
-      <div class="small muted" style="margin-top:10px">Clicking Pay shows a fake confirmation. No money moves, nothing is submitted.</div>
+      <div class="small muted" style="margin-top:10px">${
+        razorpay
+          ? `An order is created on this server for the amount above, Razorpay collects the payment, and the server verifies Razorpay's signature before showing the confirmation.${pay.test ? ' Test mode: no real money.' : ''}`
+          : 'Clicking Pay shows a fake confirmation. No money moves, nothing is submitted.'
+      }</div>
     </section>
   </div>
 
+  ${razorpay ? '<script src="https://checkout.razorpay.com/v1/checkout.js"></script>' : ''}
   <section class="confirm" style="margin-top:16px" data-confirmation hidden>
     <div class="row between">
-      <h2>Payment confirmed (dummy)</h2>
-      <span class="badge ok">Fake confirmation</span>
+      <h2 data-confirmation-title>Payment confirmed</h2>
+      <span class="badge ok" data-confirmation-badge>Confirmed</span>
     </div>
     <dl class="kv" data-confirmation-body></dl>
     <div class="row" style="margin-top:14px">
@@ -162,6 +179,7 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
   const script = `
 (function () {
   var MODE = ${jsonScript(mode)};
+  var PAYMENT = ${jsonScript(pay)};
   var CURRENCY = ${jsonScript(currency)};
   var FALLBACK_TOTAL = ${jsonScript(fallbackTotal.total)};
   var SERVER_PICKS = ${jsonScript(picks || {})};
@@ -219,15 +237,20 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
   document.getElementById('phone').addEventListener('input', function (e) { e.target.value = e.target.value.replace(/\\D/g, '').slice(0, 12); });
 
   $('[data-fill-test]').addEventListener('click', function () {
-    Object.keys(TEST_VALUES).forEach(function (k) { setVal(k, TEST_VALUES[k]); });
+    Object.keys(TEST_VALUES).forEach(function (k) {
+      if (PAYMENT.provider === 'razorpay' && ['cardName', 'cardNumber', 'expiry', 'cvv', 'upi'].indexOf(k) !== -1) return;
+      setVal(k, TEST_VALUES[k]);
+    });
   });
 
   // ---- validation + fake pay -------------------------------------------
   function validate() {
     var errors = [];
     if (!val('name').trim()) errors.push('traveler name');
+    if (PAYMENT.provider === 'razorpay' && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(val('email').trim())) errors.push('a valid email');
     if (!/^\\d{10,12}$/.test(val('phone'))) errors.push('a 10-digit phone');
     if (!(Number(val('travelers')) >= 1)) errors.push('number of travelers');
+    if (PAYMENT.provider === 'razorpay') return errors; // instrument is collected by Razorpay Checkout
     if (method === 'card') {
       if (val('cardNumber').replace(/\\s/g, '').length !== 16) errors.push('a 16-digit test card number');
       if (!/^(0[1-9]|1[0-2])\\/\\d{2}$/.test(val('expiry'))) errors.push('expiry as MM/YY');
@@ -245,22 +268,74 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
     return out;
   }
 
+  function detailsPayload() {
+    return {
+      name: val('name').trim(), email: val('email').trim(), phone: val('phone'), travelers: Number(val('travelers')),
+      destination: val('destination'), startDate: val('startDate'), endDate: val('endDate'), notes: val('notes').trim(),
+    };
+  }
+
+  async function payWithRazorpay(btn, status) {
+    status.className = 'status'; status.textContent = 'Creating order\\u2026';
+    var res = await fetch('/api/razorpay/order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(detailsPayload()) });
+    var order = await res.json();
+    if (!res.ok || !order.ok) throw new Error(order.error || ('HTTP ' + res.status));
+    if (typeof window.Razorpay !== 'function') throw new Error('Razorpay Checkout script did not load (offline?)');
+    status.textContent = 'Complete the payment in the Razorpay window\\u2026';
+    await new Promise(function (resolve, reject) {
+      var rzp = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'Travel Concierge',
+        description: order.description,
+        order_id: order.orderId,
+        prefill: order.prefill,
+        notes: { travelers: String(detailsPayload().travelers) },
+        theme: { color: '#ffb224' },
+        modal: { ondismiss: function () { reject(new Error('Payment window closed before paying')); } },
+        handler: async function (response) {
+          try {
+            status.textContent = 'Verifying payment\\u2026';
+            var vres = await fetch('/api/razorpay/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(response) });
+            var data = await vres.json();
+            if (!vres.ok || !data.ok) throw new Error(data.error || ('HTTP ' + vres.status));
+            try { sessionStorage.setItem('travel-confirmation', JSON.stringify(data.confirmation)); } catch (e) {}
+            showConfirmation(data.confirmation);
+            resolve();
+          } catch (err) { reject(err); }
+        },
+      });
+      rzp.on('payment.failed', function (r) { reject(new Error((r.error && r.error.description) || 'Payment failed')); });
+      rzp.open();
+    });
+  }
+
   $('[data-pay]').addEventListener('click', async function () {
     var btn = this, status = $('[data-pay-status]');
     var errors = validate();
     if (errors.length) { status.className = 'status bad'; status.textContent = 'Please provide ' + errors.join(', ') + '.'; return; }
+    if (PAYMENT.provider === 'razorpay') {
+      btn.disabled = true;
+      try { await payWithRazorpay(btn, status); status.textContent = ''; }
+      catch (err) { status.className = 'status bad'; status.textContent = err.message; }
+      btn.disabled = false;
+      return;
+    }
     btn.disabled = true; status.className = 'status'; status.textContent = 'Processing (pretend)\\u2026';
     await new Promise(function (r) { setTimeout(r, 900); });
 
     // Only a non-sensitive summary is kept: no card number, CVV, expiry or UPI id.
+    var d = detailsPayload();
     var confirmation = {
+      provider: 'dummy', dummy: true, test: false,
       paymentId: fakeId('pay'),
       orderId: fakeId('order'),
       amount: amount, currency: CURRENCY,
-      method: method === 'card' ? 'Card (test card ending ' + val('cardNumber').replace(/\\s/g, '').slice(-4) + ')' : 'UPI',
-      traveler: val('name').trim(), travelers: Number(val('travelers')),
-      destination: val('destination'), startDate: val('startDate'), endDate: val('endDate'),
-      picks: picks, confirmedAt: new Date().toISOString(), dummy: true,
+      method: method === 'card' ? 'Card (test card ending ' + val('cardNumber').replace(/\\s/g, '').slice(-4) + ', dummy widget)' : 'UPI (dummy widget)',
+      traveler: d.name, email: d.email, phone: d.phone, travelers: d.travelers,
+      destination: d.destination, startDate: d.startDate, endDate: d.endDate, notes: d.notes,
+      picks: picks, confirmedAt: new Date().toISOString(),
     };
     try { sessionStorage.setItem('travel-confirmation', JSON.stringify(confirmation)); } catch (e) {}
     if (MODE === 'server') {
@@ -272,12 +347,16 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
 
   function showConfirmation(c) {
     var dl = $('[data-confirmation-body]');
+    var isDummy = c.dummy !== false;
+    $('[data-confirmation-title]').textContent = isDummy ? 'Payment confirmed (dummy)' : c.test ? 'Payment confirmed (Razorpay test mode)' : 'Payment confirmed';
+    $('[data-confirmation-badge]').textContent = isDummy ? 'Fake confirmation' : c.test ? 'Razorpay test' : 'Paid';
     var rows = [
-      ['Payment id', c.paymentId], ['Order id', c.orderId], ['Amount', fmt(c.amount)], ['Method', c.method],
-      ['Traveler', c.traveler + ' (' + c.travelers + ' traveler' + (c.travelers === 1 ? '' : 's') + ')'],
+      ['Payment id', c.paymentId], ['Order id', c.orderId || '\\u2014'], ['Amount', fmt(c.amount)], ['Method', c.method],
+      ['Traveler', c.traveler + ' (' + c.travelers + ' traveler' + (c.travelers === 1 ? '' : 's') + ')' + (c.email ? ' \\u00b7 ' + c.email : '') + (c.phone ? ' \\u00b7 ' + c.phone : '')],
       ['Trip', c.destination + (c.startDate ? ', ' + c.startDate + (c.endDate ? ' \\u2013 ' + c.endDate : '') : '')],
-      ['Status', 'DUMMY \\u2014 no real payment was made'],
     ];
+    if (c.notes) rows.push(['Requests', c.notes]);
+    rows.push(['Status', isDummy ? 'DUMMY \\u2014 no real payment was made' : c.test ? 'Captured in Razorpay TEST mode \\u2014 no real money moved' : (c.status || 'captured')]);
     dl.innerHTML = '';
     rows.forEach(function (r) {
       var dt = document.createElement('dt'); dt.textContent = r[0];
@@ -331,6 +410,11 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
     { id: 'upi', when: 'upi', ask: 'What is the UPI id? For example, test at demo.', parse: function (t) { var s = t.toLowerCase().replace(/\\s+at\\s+/g, '@').replace(/\\s+dot\\s+/g, '.').replace(/\\s+/g, ''); return /^[\\w.\\-]+@[\\w\\-]+$/.test(s) ? s : null; }, retry: 'Please say the UPI id as name, at, provider.' },
   ];
 
+  if (PAYMENT.provider === 'razorpay') {
+    // Razorpay collects the instrument itself — the voice agent only fills the details.
+    STEPS = STEPS.filter(function (st) { return !st.when && st.id !== '__method'; });
+  }
+
   var statusEl = $('[data-voice-status]');
   var logEl = $('[data-voice-log]');
   var agent = window.createVoiceAgent({
@@ -366,6 +450,8 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
     script: `${VOICE_CLIENT_JS}\n${script}`,
     activeNav: 'checkout',
     links,
-    footer: 'Dummy checkout. No SDK, no gateway, no network call for payment — inputs are discarded when this tab closes.',
+    footer: razorpay
+      ? `Payments by Razorpay${pay.test ? ' (test mode — no real money)' : ''}. Card/UPI details are entered in Razorpay's checkout, never on this page.`
+      : 'Dummy checkout. No SDK, no gateway, no network call for payment — inputs are discarded when this tab closes.',
   });
 }
