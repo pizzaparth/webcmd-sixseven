@@ -34,10 +34,14 @@ purpose (see "Retained sessions" below).
    pages, deciding what to click/type, adapting to a CAPTCHA or an
    unexpected layout — using whatever `claude` auth is already on the
    machine (no separate `ANTHROPIC_API_KEY` needed). This is the actual
-   "AI does the processing in the background" architecture. `--dry-run`
+   "AI does the processing in the background" architecture. Progress
+   streams live to the terminal (`--output-format stream-json`) rather than
+   going silent until the end — confirmed live that plain text mode looks
+   "frozen" on a run that genuinely takes several minutes. `--dry-run`
    prints the exact prompt without calling `claude` at all;
-   `--max-budget-usd` (default 2) caps spend, since it's browsing several
-   real sites; `--model` picks a model.
+   `--max-budget-usd` (default 6 — a full 5-platform run needs more than
+   the original default of 2, confirmed live) caps spend, since it's
+   browsing several real sites; `--model` picks a model.
 2. **`agent-prompt.md`** — the human-readable reference for the prompt
    `prompt.js` generates, for pasting into a chat session by hand instead of
    running `run-agent.js`. Keep the wording in sync if you edit either.
@@ -120,55 +124,71 @@ prompt and Session name the run would use without invoking `webcmd` (or, for
 
 ## Using your own Chrome identity (optional)
 
-A webcmd **Profile** is not your regular, already-signed-in desktop
-Chrome — it's an isolated Webcmd-managed Chrome identity that starts
-completely blank. That's why every site sees a run as a fresh guest by
-default, regardless of who you're actually signed in as elsewhere.
+A webcmd **Profile** is normally not your regular, already-signed-in
+desktop Chrome — it's an isolated Webcmd-managed Chrome identity that
+starts completely blank. That's why every site sees a run as a fresh guest
+by default, regardless of who you're actually signed in as elsewhere.
+Neither entry point ever drives your literal, live daily Chrome window —
+that's a deliberate boundary, not a limitation (an autonomous agent
+shouldn't be loose in the same window as your real open tabs and sessions).
 
-Both entry points now resolve which Profile to use the same way
-(`src/lib/profile.js`), unless you pass `--profile <name>` explicitly:
-
-1. Use the **`parthnotparth.gmail.com`** Profile if it already exists.
-2. Otherwise fall back to the guest **`travel-agent`** Profile (created
-   automatically, never signed into anything).
-
-Creating the `parthnotparth.gmail.com` alias alone (which happens
-automatically the first time it's needed) does **not** sign it into
-anything — it's still a blank profile until you complete a one-time,
-interactive sign-in inside it:
+There's a real, supported bridge though: **webcmd can import a real native
+Chrome profile's cookies into its own managed `default` Profile.** Run once
+on this machine (2026-09-12) and confirmed live — a fresh session under
+`--profile default` opened `myaccount.google.com` already signed in as
+"Parth (parthnotparth@gmail.com)", no login prompt:
 
 ```bash
-# 1. Create the alias if it doesn't exist yet, and open a session in it.
-webcmd profile create parthnotparth.gmail.com   # no-op if it already exists
-webcmd --profile parthnotparth.gmail.com session create "auth-setup" -f json
-# → note the returned session id, e.g. "auth-setup-a1"
+# Find your real Chrome profile folder names first if you're not sure which
+# is which — "Default" is usually your everyday one:
+ls "$HOME/Library/Application Support/Google/Chrome/" | grep -i "profile\|default"
 
-# 2. Open a real, visible Chrome window in that session and navigate to a
-#    sign-in page — do this for Google itself, and separately for any
-#    travel site you want to already be logged into (MakeMyTrip, etc.).
-webcmd --profile parthnotparth.gmail.com --session auth-setup-a1 browser run --stdin <<'JS'
-await page.goto('https://accounts.google.com/');
-return { url: page.url() };
-JS
-
-# 3. Sign in by hand in the Chrome window that opens (email, password, 2FA —
-#    never paste credentials into a webcmd command or into chat). Repeat
-#    step 2's `page.goto` with a different site's login page, in the same
-#    session, for each site you want persistently signed in.
-
-# 4. Leave the session open, or close just this setup session once done —
-#    the sign-in state stays with the Profile either way:
-webcmd --profile parthnotparth.gmail.com session close auth-setup-a1
+webcmd setup --browser chrome --chrome-profile Default --import-chrome-cookies
 ```
 
-From then on, any run of `run-agent.js`/`index.js` that resolves to this
-Profile carries those cookies. **Caveat, confirmed live on 2026-09-12:**
-this does not eliminate bot-detection walls like Skyscanner's PerimeterX
-check — an established, human-browsed profile may look somewhat less
-suspicious than a completely fresh one, but it's not a guaranteed fix, and
-signing into Google alone doesn't log you into unrelated travel sites (you'd
-need to sign into each of those separately, in the same Profile, the same
-way).
+**Understand what this actually does before running it:** it copies real
+cookies out of your real Chrome profile into webcmd's managed storage. From
+then on, any Webcmd Session under that Profile is authenticated as you —
+not just on Google, but on anything you happened to be signed into in that
+Chrome profile at import time. An autonomous run (especially the
+Claude-driven path, unattended) then has that same access. The hard rules
+in `src/lib/prompt.js`/`agent-prompt.md` (read-only, no login, no checkout,
+no payment forms) matter more once a Profile is genuinely you, not less —
+they're what keeps an authenticated run from doing anything with that
+access beyond searching and reading. Re-run the same command any time your
+real cookies change (e.g. after a fresh sign-in) to refresh the import.
+
+Both entry points resolve which Profile to use the same way
+(`src/lib/profile.js`), unless you pass `--profile <name>` explicitly:
+
+1. **`default`** — webcmd's own implicit Profile. Always exists, so it's
+   always the choice unless overridden. On this machine it's the real
+   imported identity above; on a machine where that import was never run,
+   it's simply another blank profile.
+2. Pass `--profile travel-agent` explicitly to force the isolated guest
+   Profile even on a machine that has done the import (e.g. to deliberately
+   test what a logged-out visitor sees).
+
+Prefer not to import real cookies? The narrower alternative is a one-time
+*manual* sign-in inside an isolated Profile — only whatever you explicitly
+sign into there is ever exposed, nothing else from your real browser:
+
+```bash
+webcmd profile create personal
+webcmd --profile personal session create "auth-setup" -f json   # note the session id
+webcmd --profile personal --session <that-id> browser run --stdin <<'JS'
+await page.goto('https://accounts.google.com/');   # or any site's login page
+return { url: page.url() };
+JS
+# Sign in by hand in the Chrome window that opens (never paste credentials
+# into a webcmd command or into chat). Repeat the goto for each site you
+# want persistently signed in, then run with --profile personal.
+```
+
+**Caveat either way, confirmed live on 2026-09-12:** neither approach
+eliminates bot-detection walls like Skyscanner's PerimeterX check — an
+authenticated, human-browsed profile may look less suspicious than a
+completely fresh one, but it's not a guaranteed fix.
 
 ## What actually happens per category
 
@@ -264,6 +284,36 @@ and `agent-prompt.md` all use ixigo Flights now. Re-tested with
 non-stop IndiGo flight, Mumbai (BOM) → Goa (GOI) — on the very first try,
 better than any other platform tested so far including ixigo Trains (which
 needed the line-splitting fix first). Confidence bumped to MEDIUM.
+
+**Later the same day — streaming, budget, and real-identity fixes, all
+confirmed live:**
+
+- A full `run-agent.js` run hit `Exceeded USD budget (2)` before finishing
+  (the original default was sized for a 2-platform test, not the full
+  5-platform run) — fixed by raising the default to 6 (see "Three ways to
+  run this" above).
+- Plain `-p` text-mode output stayed completely silent until the run
+  finished or errored, which reads as "hung" on a run that can take several
+  minutes — fixed by switching to `--output-format stream-json` and
+  pretty-printing each event. Confirmed live: a re-run showed visible,
+  incremental progress the whole way (tool calls, reasoning text) across 31
+  turns, cost $0.589, and produced a genuinely adaptive result — it
+  misclicked a traveler-count widget once (got `adults=4` back in the
+  results URL), noticed the wrong value itself, and recovered by reloading
+  the same URL with the count corrected rather than blindly retrying.
+- **`webcmd setup --browser chrome --chrome-profile Default --import-chrome-cookies`
+  genuinely imports a real native Chrome profile's cookies** into webcmd's
+  own `default` Profile — confirmed live: a session under `--profile
+  default` opened `myaccount.google.com` already signed in, no prompt. This
+  always lands in webcmd's implicit `default` Profile specifically, not a
+  custom alias (a custom `@`-free alias like the earlier
+  `parthnotparth.gmail.com` attempt is a dead end for this purpose — the
+  import command doesn't target custom aliases). `src/lib/profile.js` was
+  rewritten around this: `PERSONAL_PROFILE` is now `'default'`, and
+  resolution no longer needs to detect anything, since `default` always
+  exists. See "Using your own Chrome identity" above for the real
+  implications of doing this (it's not just a convenience — an unattended
+  run then has your real, authenticated access).
 
 ## Why one Session per platform (not one Session, many tabs)
 

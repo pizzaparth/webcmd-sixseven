@@ -80,15 +80,18 @@ Options:
   --budget <amount>             Numeric budget (no currency symbol needed).
   --currency <code>             Default: INR.
   --travelers <n>                Default: 1.
-  --profile <name>              webcmd Profile to use. Default: the "parthnotparth.gmail.com"
-                                 profile if it already exists (see README "Using your own
-                                 Chrome identity"), else the guest "travel-agent" profile.
+  --profile <name>              webcmd Profile to use. Default: "default" — webcmd's own
+                                 implicit profile (real, if you've run the cookie-import
+                                 setup in README "Using your own Chrome identity"; otherwise
+                                 blank). Pass --profile travel-agent to force the guest profile.
   --trip-name <slug>             Used to name Sessions and the output file. Default: derived from destination + timestamp.
   --out-dir <path>               Where to write the trip JSON. Default: ./output relative to this script.
   --skip <list>                 Comma-separated categories to skip, e.g. "cabs,hotels".
   --dry-run                     src/index.js: print the plan without calling webcmd. src/run-agent.js: print the prompt without calling claude.
   --model <name>                run-agent.js only: model for the claude CLI to use (e.g. "sonnet", "opus").
-  --max-budget-usd <n>          run-agent.js only: spend cap for the claude CLI run. Default: 2.
+  --max-budget-usd <n>          run-agent.js only: spend cap for the claude CLI run. Default: 6
+                                 (a full flights+trains+cabs+hotels+places run needs more than the
+                                 old default of 2 — confirmed live, that hit "Exceeded USD budget").
   -h, --help                    Show this help.
 `);
 }

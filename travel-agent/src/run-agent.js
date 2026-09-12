@@ -22,7 +22,7 @@ import { parseCliArgs } from './lib/args.js';
 import { buildTripSlug } from './lib/orchestrator.js';
 import { buildAgentPrompt } from './lib/prompt.js';
 import { runClaudeAgent } from './lib/claude-agent.js';
-import { resolveProfile, PERSONAL_PROFILE, GUEST_PROFILE } from './lib/profile.js';
+import { resolveProfile, PERSONAL_PROFILE } from './lib/profile.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -46,37 +46,29 @@ async function main() {
   if (skip.length) console.log(`  Skipping: ${skip.join(', ')}`);
 
   if (dryRun) {
-    // Dry run makes zero webcmd calls, including `profile list` — so the
-    // resolved-at-runtime choice is only described here, not looked up.
-    console.log(
-      `  Profile: ${profileFlag || `${PERSONAL_PROFILE} if it exists, else guest "${GUEST_PROFILE}" (resolved at runtime, not looked up in a dry run)`}`,
-    );
+    // Dry run makes zero webcmd calls — resolution is deterministic (no
+    // detection needed, see profile.js), so it's safe to show directly.
+    const profile = profileFlag || PERSONAL_PROFILE;
+    console.log(`  Profile: ${profile}${profileFlag ? '' : ' (account profile — guest if cookie-import setup was never run on this machine)'}`);
     console.log('');
-    const prompt = buildAgentPrompt({
-      intent,
-      profile: profileFlag || GUEST_PROFILE,
-      tripSlug,
-      outputPath: outputPathForPrompt,
-      skip,
-    });
+    const prompt = buildAgentPrompt({ intent, profile, tripSlug, outputPath: outputPathForPrompt, skip });
     console.log('--- DRY RUN: prompt that would be sent to `claude -p` (nothing was called) ---\n');
     console.log(prompt);
     return;
   }
 
   const { profile, source } = await resolveProfile(profileFlag);
-  const sourceNote =
-    source === 'personal' ? ' (your account)' : source === 'guest-fallback' ? ' (guest — see README to set up your account)' : '';
-  console.log(`  Profile: ${profile}${sourceNote}`);
+  console.log(`  Profile: ${profile}${source === 'personal' ? ' (account profile)' : ''}`);
   console.log('');
 
   const prompt = buildAgentPrompt({ intent, profile, tripSlug, outputPath: outputPathForPrompt, skip });
 
-  console.log('Handing off to `claude` — Claude AI drives webcmd from here (this can take a while)...\n');
+  const effectiveBudget = maxBudgetUsd ?? 6;
+  console.log(`Handing off to \`claude\` (budget: $${effectiveBudget}) — Claude AI drives webcmd from here, progress streams below...\n`);
   await runClaudeAgent(prompt, {
     cwd: REPO_ROOT,
     model: model || undefined,
-    maxBudgetUsd: maxBudgetUsd ?? 2,
+    maxBudgetUsd: effectiveBudget,
   });
 }
 

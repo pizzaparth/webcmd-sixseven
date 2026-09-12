@@ -14,7 +14,7 @@ import { runTrip } from './lib/orchestrator.js';
 import { printComparisonTables, printPlaces, printOpenTabsSummary } from './lib/report.js';
 import { buildTripData, writeTripData } from './lib/store.js';
 import { checkWebcmdVersion, runDoctor } from './lib/webcmd.js';
-import { resolveProfile, PERSONAL_PROFILE, GUEST_PROFILE } from './lib/profile.js';
+import { resolveProfile, PERSONAL_PROFILE } from './lib/profile.js';
 
 async function preflight() {
   try {
@@ -60,23 +60,15 @@ async function main() {
 
   let profile;
   if (dryRun) {
-    // Dry run makes zero webcmd calls, including `profile list` — so the
-    // resolved-at-runtime choice is only described here, not looked up.
-    profile = profileFlag || GUEST_PROFILE;
-    console.log(
-      `  Profile: ${profileFlag || `${PERSONAL_PROFILE} if it exists, else guest "${GUEST_PROFILE}" (resolved at runtime, not looked up in a dry run)`}`,
-    );
+    // Dry run makes zero webcmd calls — resolution is deterministic (no
+    // detection needed, see profile.js), so it's safe to show directly.
+    profile = profileFlag || PERSONAL_PROFILE;
+    console.log(`  Profile: ${profile}${profileFlag ? '' : ' (account profile — guest if cookie-import setup was never run on this machine)'}`);
   } else {
     await preflight();
     const resolved = await resolveProfile(profileFlag);
     profile = resolved.profile;
-    const sourceNote =
-      resolved.source === 'personal'
-        ? ' (your account)'
-        : resolved.source === 'guest-fallback'
-          ? ' (guest — see README to set up your account)'
-          : '';
-    console.log(`  Profile: ${profile}${sourceNote}`);
+    console.log(`  Profile: ${profile}${resolved.source === 'personal' ? ' (account profile)' : ''}`);
   }
   if (skip.length) console.log(`  Skipping: ${skip.join(', ')}`);
   console.log(dryRun ? '  Mode: DRY RUN (no webcmd commands will run)\n' : '');
