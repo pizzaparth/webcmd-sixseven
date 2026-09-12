@@ -199,6 +199,69 @@ Nothing accumulates automatically beyond what `webcmd` itself retains —
 clean up old Sessions yourself with `webcmd --profile travel-agent session
 close <id>` once you're done with a given run, or between demo rehearsals.
 
+## Website: price comparison page (`web/`)
+
+The website side of `../plan.md`, built on one shared dark-theme template
+(`web/template.js`) that the details+payment and summary pages will reuse.
+Zero npm dependencies, like the agent.
+
+```bash
+cd travel-agent
+node web/server.js                      # newest output/*.json, or the bundled sample if none
+node web/server.js output/goa-123.json  # a specific trip file
+node web/server.js --no-open            # skip webcmd; "Choose" opens the URL in your browser
+# then open http://127.0.0.1:4173/
+```
+
+What the page does:
+
+- **Static "live price" banner** — sum of the cheapest captured price per
+  category, computed once from the JSON. The "last updated" clock ticks, but
+  the number is a snapshot (say so if asked — see plan.md "Risks").
+- **One card per platform per category** with the option found, its price
+  (or "Price not captured" / homepage fallback note), a confidence badge,
+  and a **"Choose `<platform>`" button**. Clicking it `POST`s
+  `/api/choose`; the server creates a fresh webcmd Session
+  (`travel-<trip>-pick-<category>-<platform>`) and navigates it to that
+  result's URL — the agent's original Sessions are left untouched. If
+  `webcmd` isn't reachable (or `--no-open`), the response returns the URL
+  and the page opens it in your own browser instead.
+- **Your picks** — selections live in server memory for the run
+  (`GET /api/picks`) so the details+payment and summary pages can read them;
+  nothing is written to disk.
+- `/summary` is a placeholder on the same template until that page is built.
+
+### Details + dummy payment page (`/checkout`, `web/checkout.js`)
+
+One screen: the trip-details form (name, email, phone, travelers, dates,
+requests — pre-filled from the trip intent where known) next to a
+Razorpay-*style* payment widget (Card or UPI tab). It lists the picks from
+the comparison page and uses their total as the amount (falling back to the
+banner's best total if nothing was picked).
+
+- **Entirely dummy.** No SDK, no gateway, no network call for payment.
+  "Pay" validates the fields locally, waits a beat, and shows a fake
+  confirmation (`pay_DEMO…` / `order_DEMO…`). In server mode it also POSTs a
+  **non-sensitive** summary (ids, amount, method label, traveler name,
+  dates) to `/api/confirm` in memory so the summary page can show it — card
+  number, expiry, CVV and UPI id never leave the tab.
+- **"Fill test values"** drops in obviously-fake data (4111 1111 1111 1111,
+  `test@demo`, etc.). Say out loud in the demo that everything is fake.
+- **🎤 Voice fill** uses the browser's Web Speech API (`SpeechSynthesis` to
+  ask, `SpeechRecognition` to listen — Chrome works best, no keys, no
+  backend). It walks name → phone → travelers → card/UPI → the matching
+  payment fields, highlighting the field being filled, retrying up to 3×
+  per question and skipping if it still can't parse the answer. Fields stay
+  editable by hand afterwards for corrections. Needs a mic permission the
+  first time; if the API is missing it says so and you fill by hand.
+
+`node web/build.js output/<trip>.json` writes standalone
+`output/<trip>.html` + `output/<trip>.checkout.html` instead (no server;
+buttons open URLs directly, picks pass between pages via `sessionStorage`).
+`web/fixtures/sample-trip.json` is a hand-written example of the output
+schema below, used when `output/` is empty so the page can be demoed
+before a real run.
+
 ## Free text parsing
 
 `src/lib/args.js#parseFreeText` is a small regex-based heuristic (destination

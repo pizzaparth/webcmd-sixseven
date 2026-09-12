@@ -1,0 +1,127 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-09-12T09:30:00.000Z",
+  "intent": {
+    "raw": "Trip to Goa from Mumbai, 12 Oct to 15 Oct, budget 30000 for 2 travelers",
+    "origin": "Mumbai",
+    "destination": "Goa",
+    "startDate": "2026-10-12",
+    "endDate": "2026-10-15",
+    "budget": 30000,
+    "currency": "INR",
+    "travelers": 2,
+    "preferences": []
+  },
+  "profile": "travel-agent",
+  "results": [
+    {
+      "category": "flights",
+      "platform": "Skyscanner",
+      "platformId": "skyscanner",
+      "url": "https://www.skyscanner.net/transport/flights/bom/goi/261012/?adultsv2=2&cabinclass=economy",
+      "homepage": "https://www.skyscanner.net/",
+      "usedFallbackHomepage": false,
+      "confidence": "LOW",
+      "profile": "travel-agent",
+      "sessionId": "travel-goa-sample-flights-skyscanner-a1",
+      "candidates": [
+        { "title": "IndiGo · BOM 06:10 → GOI 07:25 · Non-stop", "price": 4523, "currency": "INR", "rawLine": "₹4,523 IndiGo 06:10 - 07:25 Non-stop" },
+        { "title": "Air India · BOM 09:40 → GOI 11:00 · Non-stop", "price": 5210, "currency": "INR", "rawLine": "₹5,210 Air India 09:40 - 11:00 Non-stop" }
+      ],
+      "pick": { "title": "IndiGo · BOM 06:10 → GOI 07:25 · Non-stop", "price": 4523, "currency": "INR", "rawLine": "₹4,523 IndiGo 06:10 - 07:25 Non-stop" },
+      "error": null,
+      "fetchedAt": "2026-09-12T09:25:10.000Z"
+    },
+    {
+      "category": "trains",
+      "platform": "ixigo Trains",
+      "platformId": "ixigo-trains",
+      "url": "https://www.ixigo.com/search/result/train/Mumbai/Goa/12102026",
+      "homepage": "https://www.ixigo.com/trains",
+      "usedFallbackHomepage": false,
+      "confidence": "MEDIUM",
+      "profile": "travel-agent",
+      "sessionId": "travel-goa-sample-trains-ixigo-trains-b2",
+      "candidates": [
+        { "title": "10103 Mandovi Express · CSMT 07:10 → MAO 18:35 · SL", "price": 385, "currency": "INR", "rawLine": "₹385 Mandovi Express SL" },
+        { "title": "12051 Jan Shatabdi · DR 05:25 → MAO 13:50 · CC", "price": 1095, "currency": "INR", "rawLine": "₹1,095 Jan Shatabdi CC" },
+        { "title": "10103 Mandovi Express · CSMT 07:10 → MAO 18:35 · 3A", "price": 1240, "currency": "INR", "rawLine": "₹1,240 Mandovi Express 3A" }
+      ],
+      "pick": { "title": "10103 Mandovi Express · CSMT 07:10 → MAO 18:35 · SL", "price": 385, "currency": "INR", "rawLine": "₹385 Mandovi Express SL" },
+      "error": null,
+      "fetchedAt": "2026-09-12T09:26:02.000Z"
+    },
+    {
+      "category": "cabs",
+      "platform": "JustDial",
+      "platformId": "justdial",
+      "url": "https://www.justdial.com/Goa/Car-Rental",
+      "homepage": "https://www.justdial.com/",
+      "usedFallbackHomepage": false,
+      "confidence": "LOW",
+      "profile": "travel-agent",
+      "sessionId": "travel-goa-sample-cabs-justdial-c3",
+      "candidates": [
+        { "title": "Goa Cabs & Tours · 4.6 ★ (312 ratings) · Airport pickup", "price": 1500, "currency": "INR", "rawLine": "₹1,500 onwards Goa Cabs & Tours" }
+      ],
+      "pick": { "title": "Goa Cabs & Tours · 4.6 ★ (312 ratings) · Airport pickup", "price": 1500, "currency": "INR", "rawLine": "₹1,500 onwards Goa Cabs & Tours" },
+      "error": null,
+      "fetchedAt": "2026-09-12T09:27:15.000Z"
+    },
+    {
+      "category": "hotels",
+      "platform": "MakeMyTrip",
+      "platformId": "makemytrip",
+      "url": "https://www.makemytrip.com/hotels/hotel-listing/?checkin=10122026&checkout=10152026&city=CTGOI&roomStayQualifier=2e0e",
+      "homepage": "https://www.makemytrip.com/hotels/",
+      "usedFallbackHomepage": false,
+      "confidence": "MEDIUM",
+      "profile": "travel-agent",
+      "sessionId": "travel-goa-sample-hotels-makemytrip-d4",
+      "candidates": [
+        { "title": "Sea Breeze Resort, Calangute · 3 nights · Deluxe room", "price": 7800, "currency": "INR", "rawLine": "₹7,800 Sea Breeze Resort Calangute" },
+        { "title": "Palm Grove Cottages, Candolim · 3 nights", "price": 9450, "currency": "INR", "rawLine": "₹9,450 Palm Grove Cottages" }
+      ],
+      "pick": { "title": "Sea Breeze Resort, Calangute · 3 nights · Deluxe room", "price": 7800, "currency": "INR", "rawLine": "₹7,800 Sea Breeze Resort Calangute" },
+      "error": null,
+      "fetchedAt": "2026-09-12T09:28:30.000Z"
+    },
+    {
+      "category": "hotels",
+      "platform": "Goibibo",
+      "platformId": "goibibo",
+      "url": "https://www.goibibo.com/hotels/",
+      "homepage": "https://www.goibibo.com/hotels/",
+      "usedFallbackHomepage": true,
+      "confidence": "LOW",
+      "profile": "travel-agent",
+      "sessionId": "travel-goa-sample-hotels-goibibo-e5",
+      "candidates": [],
+      "pick": null,
+      "error": null,
+      "fetchedAt": "2026-09-12T09:29:12.000Z"
+    }
+  ],
+  "places": {
+    "query": "things to do in Goa",
+    "url": "https://www.google.com/search?q=things+to+do+in+Goa",
+    "shortlist": [
+      "Baga Beach and Calangute Beach",
+      "Basilica of Bom Jesus, Old Goa",
+      "Dudhsagar Falls day trip",
+      "Fort Aguada",
+      "Anjuna flea market (Wednesdays)"
+    ],
+    "profile": "travel-agent",
+    "sessionId": "travel-goa-sample-places-f6",
+    "error": null
+  },
+  "openTabs": [
+    { "profile": "travel-agent", "sessionId": "travel-goa-sample-flights-skyscanner-a1", "category": "flights", "platform": "Skyscanner" },
+    { "profile": "travel-agent", "sessionId": "travel-goa-sample-trains-ixigo-trains-b2", "category": "trains", "platform": "ixigo Trains" },
+    { "profile": "travel-agent", "sessionId": "travel-goa-sample-cabs-justdial-c3", "category": "cabs", "platform": "JustDial" },
+    { "profile": "travel-agent", "sessionId": "travel-goa-sample-hotels-makemytrip-d4", "category": "hotels", "platform": "MakeMyTrip" },
+    { "profile": "travel-agent", "sessionId": "travel-goa-sample-hotels-goibibo-e5", "category": "hotels", "platform": "Goibibo" },
+    { "profile": "travel-agent", "sessionId": "travel-goa-sample-places-f6", "category": "places", "platform": "Google Search" }
+  ]
+}
