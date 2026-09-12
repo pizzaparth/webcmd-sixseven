@@ -373,8 +373,12 @@ cd travel-agent
 node web/server.js                      # newest output/*.json, or the bundled sample if none
 node web/server.js output/goa-123.json  # a specific trip file
 node web/server.js --no-open            # skip webcmd; "Choose" opens the URL in your browser
-# then open http://127.0.0.1:4173/
+node web/server.js --no-launch          # don't open the comparison page on startup
 ```
+
+Starting the server **opens the comparison page in your default browser**, so a
+demo is one command with no URL to paste. Pass `--no-launch` to suppress that
+(the URL is always printed either way).
 
 What the page does:
 
@@ -392,6 +396,12 @@ What the page does:
 - **Your picks** — selections live in server memory for the run
   (`GET /api/picks`) so the details+payment and summary pages can read them;
   nothing is written to disk.
+- **Hands-free hand-off** — once every category in the trip has a pick, the
+  page counts down 5 seconds and moves to the details+payment page on its own.
+  It waits for *all* categories so choosing a flight can't skip past the hotel
+  choice, restarts the countdown if you change a pick, and offers a **"Stay
+  here"** button to opt out (after which the manual "Continue to details &
+  payment" button still works).
 - **Summary page** (`/summary`, `web/summary.js`) — the picks (with the
   webcmd Session each one opened), the dummy payment's fake confirmation,
   every Session the search run left open (with links and session ids), and
