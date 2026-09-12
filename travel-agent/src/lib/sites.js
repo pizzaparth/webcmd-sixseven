@@ -9,9 +9,9 @@
 // still opens for that platform even when the deep link isn't right yet —
 // it just won't have a pre-filled search.
 
-import { parseDateFlexible, formatYYMMDD, formatDDMMYYYY } from './dates.js';
+import { parseDateFlexible, formatDDMMYYYY } from './dates.js';
 
-// Bounded, easily-extended lookup for Skyscanner's IATA-code deep links.
+// Bounded, easily-extended lookup for IATA-code deep links (ixigo Flights).
 // Add more cities as your demo needs them.
 const IATA_BY_CITY = {
   mumbai: 'BOM',
@@ -73,21 +73,24 @@ export function getProviders(intent) {
   return {
     flights: [
       {
-        id: 'skyscanner',
-        name: 'Skyscanner',
+        id: 'ixigo-flights',
+        name: 'ixigo Flights',
         category: 'flights',
-        homepage: 'https://www.skyscanner.net/',
-        // LOW: verified live (2026-09-12) — this deep link redirects straight
-        // to Skyscanner's bot-check interstitial ("Are you a person or a
-        // robot?"), every time it was tried. The homepage itself loads fine
-        // and exposes a real, fillable search form (origin/destination
-        // comboboxes, date picker, search button) via an act-mode snapshot —
-        // an AI agent should search from there instead of using this URL.
-        confidence: 'LOW',
+        homepage: 'https://www.ixigo.com/flights',
+        // MEDIUM: verified live (2026-09-12) — this exact URL shape returned
+        // a real, correct flight price with no CAPTCHA (₹3,915, non-stop
+        // IndiGo, BOM→GOI) on the first try. Chosen deliberately over
+        // Skyscanner: Skyscanner's deep link *and* its homepage both
+        // triggered a PerimeterX "Are you a person or a robot?" bot-check
+        // (once even mid-interaction), while ixigo.com (already used here
+        // for trains) has never shown a CAPTCHA in any test. Same fallback
+        // safety net as every other provider regardless: if this URL ever
+        // dead-ends for a given route/date, the homepage opens instead.
+        confidence: 'MEDIUM',
         candidates:
           originIata && destIata
             ? [
-                `https://www.skyscanner.net/transport/flights/${originIata.toLowerCase()}/${destIata.toLowerCase()}/${formatYYMMDD(start)}/?adultsv2=${Math.max(1, intent.travelers)}&cabinclass=economy`,
+                `https://www.ixigo.com/search/result/flight/${originIata}/${destIata}/${formatDDMMYYYY(start)}/1/0/0/E`,
               ]
             : [],
       },

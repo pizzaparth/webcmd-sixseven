@@ -19,6 +19,8 @@ const OPTION_SPEC = {
   'out-dir': { type: 'string' },
   skip: { type: 'string' },
   'dry-run': { type: 'boolean' },
+  model: { type: 'string' },
+  'max-budget-usd': { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 };
 
@@ -78,11 +80,15 @@ Options:
   --budget <amount>             Numeric budget (no currency symbol needed).
   --currency <code>             Default: INR.
   --travelers <n>                Default: 1.
-  --profile <name>              webcmd Profile to use. Default: travel-agent.
+  --profile <name>              webcmd Profile to use. Default: the "parthnotparth.gmail.com"
+                                 profile if it already exists (see README "Using your own
+                                 Chrome identity"), else the guest "travel-agent" profile.
   --trip-name <slug>             Used to name Sessions and the output file. Default: derived from destination + timestamp.
   --out-dir <path>               Where to write the trip JSON. Default: ./output relative to this script.
   --skip <list>                 Comma-separated categories to skip, e.g. "cabs,hotels".
-  --dry-run                     Print the plan (URLs, session names) without calling webcmd at all.
+  --dry-run                     src/index.js: print the plan without calling webcmd. src/run-agent.js: print the prompt without calling claude.
+  --model <name>                run-agent.js only: model for the claude CLI to use (e.g. "sonnet", "opus").
+  --max-budget-usd <n>          run-agent.js only: spend cap for the claude CLI run. Default: 2.
   -h, --help                    Show this help.
 `);
 }
@@ -137,10 +143,15 @@ export function parseCliArgs(argv) {
 
   return {
     intent,
-    profile: values.profile || 'travel-agent',
+    // null (not a hardcoded default) when --profile wasn't passed, so the
+    // caller can run resolveProfile() to prefer the personal profile when
+    // it's available — see src/lib/profile.js.
+    profile: values.profile || null,
     tripName: values['trip-name'] || null,
     outDir: values['out-dir'] || null,
     skip,
     dryRun: Boolean(values['dry-run']),
+    model: values.model || null,
+    maxBudgetUsd: values['max-budget-usd'] != null ? Number(values['max-budget-usd']) : null,
   };
 }

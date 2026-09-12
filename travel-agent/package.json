@@ -8,6 +8,7 @@
     "travel-agent": "./src/index.js"
   },
   "scripts": {
+    "agent": "node src/run-agent.js",
     "start": "node src/index.js",
     "dry-run": "node src/index.js --dry-run"
   },

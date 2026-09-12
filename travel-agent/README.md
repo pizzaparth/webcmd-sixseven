@@ -16,44 +16,75 @@ shells out to the `webcmd` CLI to:
 It never closes anything it opens — every Session/tab is left running on
 purpose (see "Retained sessions" below).
 
-## Two ways to run this
+## Three ways to run this
 
-There are two pieces here, and they answer "how does the user actually use
-this?" differently:
+1. **`src/run-agent.js` — the primary path.** CLI input in, `claude` CLI
+   underneath, Claude AI as the actual browsing agent:
 
-1. **`agent-prompt.md`** — a natural-language task for an AI coding agent
-   (Claude Code, Codex CLI, etc.) with the `webcmd-browser` skill loaded.
-   The user's only interaction is handing an AI agent this prompt (filled in
-   with trip details); the AI does every step of the actual browsing —
-   deciding what to click/type on each live page, adapting when a page
-   doesn't look like what it expected — in the background, then reports a
-   table and writes the JSON file. **This is the intended way to use
-   webcmd** (see `docs/concepts.mdx`: *"You do not need to describe
-   selectors or browser steps; the agent determines those from the live
-   website."*).
-2. **`src/index.js`** — the deterministic Node script described below. It
-   also drives webcmd, but through pre-written URLs and regexes decided
-   ahead of time, with no reasoning in the loop. It's faster and free to
-   run, and fine once a platform's search behavior is confirmed stable, but
-   it can only handle the specific failure cases someone thought to code
-   for — an AI agent (path 1) handles a *new* surprise the same way it
-   handles the last one, with no code change.
+   ```bash
+   node src/run-agent.js "Trip to Goa from Mumbai, 12 Oct to 15 Oct, budget 30000 for 2 travelers"
+   # or: npm run agent -- --to Goa --from Mumbai --start-date 2026-10-12 --budget 30000 --travelers 2
+   ```
 
-Use `agent-prompt.md` as the primary path. Use `src/index.js` for a quick,
-no-AI-cost dry run of the plumbing (arg parsing, session/JSON structure) or
-once you've hand-verified a platform's interaction and want it to run the
-same way every time.
+   It builds the task prompt (`src/lib/prompt.js`) and spawns
+   `claude -p "<prompt>" --permission-mode bypassPermissions` (see
+   `src/lib/claude-agent.js`) in this repo's directory. Claude Code loads the
+   `webcmd-browser` skill and drives webcmd itself from there — reading live
+   pages, deciding what to click/type, adapting to a CAPTCHA or an
+   unexpected layout — using whatever `claude` auth is already on the
+   machine (no separate `ANTHROPIC_API_KEY` needed). This is the actual
+   "AI does the processing in the background" architecture. `--dry-run`
+   prints the exact prompt without calling `claude` at all;
+   `--max-budget-usd` (default 2) caps spend, since it's browsing several
+   real sites; `--model` picks a model.
+2. **`agent-prompt.md`** — the human-readable reference for the prompt
+   `prompt.js` generates, for pasting into a chat session by hand instead of
+   running `run-agent.js`. Keep the wording in sync if you edit either.
+3. **`src/index.js`** — a deterministic Node script, no AI in the loop at
+   all: pre-written URLs and regexes decided ahead of time. Free and fast,
+   and fine once a platform's search behavior is confirmed stable, but it
+   can only handle the specific failure cases someone thought to code for —
+   `run-agent.js` handles a *new* surprise the same way it handles the last
+   one, with no code change. Useful for a quick, no-cost check of the
+   plumbing (arg parsing, session/JSON structure).
 
-**What was actually run live on 2026-09-12:** this environment had no
-Anthropic API key available to drive `agent-prompt.md` as a real agentic
-loop, so the verification pass below used `src/index.js` (path 2) for full
-runs, plus a short manual session — issuing `webcmd` commands by hand and
-reading an act-mode snapshot of Skyscanner's homepage to confirm a real
-search form is reachable there — as a proof of concept for what path 1
-would do adaptively. See "Verified live" below for exactly what that found,
-including three real bugs it caught and fixed in `src/index.js`/`src/lib/`.
-Path 1 itself is still unexecuted — that's the next thing to actually try,
-ideally by whoever has API/Claude Code access to run it for real.
+**`run-agent.js` (path 1) has been run live**, on 2026-09-12, for flights +
+places (`--skip trains,cabs,hotels`, Goa from Mumbai). What actually
+happened, with zero code changes needed:
+
+- Claude loaded the `webcmd-browser` skill, created two Sessions, and drove
+  Skyscanner's homepage adaptively — the origin field came pre-filled with a
+  geo-IP default city (confirming it was reading a real live page, not
+  guessing), and it was mid-way through typing the destination when
+  **Skyscanner's PerimeterX bot-check interstitial took over the tab**. It
+  tried a reload and a fresh Session; both landed on the same captcha. Per
+  the prompt's hard rules, it did **not** attempt to solve the CAPTCHA and
+  did **not** guess a price — it wrote `pick: null` with a specific,
+  accurate error message instead.
+- The places step worked cleanly and returned a real answer (the same beach
+  list `src/index.js` found separately: Baga, Calangute, Arambol, Anjuna,
+  Morjim, Sinquerim, Majorda, Benaulim & Varca, Agonda, Palolem).
+- It wrote `output/<trip>.json` matching the documented schema exactly on
+  the first try, having read `src/lib/types.js` itself.
+- It correctly left both Sessions open (never called `session close`), and
+  proactively flagged — without touching them — that the `travel-agent`
+  Profile had accumulated many idle Sessions from earlier `src/index.js`
+  test runs, which is genuinely useful behavior no fixed script would think
+  to do.
+
+This is a stronger, more specific finding than the manual pass below: the
+bot-check isn't just on a guessed deep link, it can trigger **mid-interaction
+on the homepage itself** — homepage-first doesn't fully dodge PerimeterX,
+only an actual signed-in account with enough trust signal might, and that's
+out of scope here (no login, per the hard rules). **Skyscanner has since
+been dropped from `src/lib/sites.js` entirely and replaced with ixigo
+Flights** (same domain already used for trains, which never showed a
+CAPTCHA in any test) — see "Confidence levels" below for the current list.
+
+Before that, `src/index.js` (path 3) was run for full runs, plus a short
+manual session — issuing `webcmd` commands by hand and reading an act-mode
+snapshot of Skyscanner's homepage to confirm a real search form is reachable
+there — which found and fixed three real bugs (below).
 
 ## Prerequisites
 
@@ -67,25 +98,80 @@ ideally by whoever has API/Claude Code access to run it for real.
 ```bash
 cd travel-agent
 
-# Free text (heuristic parsing — see "Free text parsing" below):
-node src/index.js "Trip to Goa from Mumbai, 12 Oct to 15 Oct, budget 30000 for 2 travelers"
+# Primary path — Claude AI drives webcmd (see "Three ways to run this" above):
+node src/run-agent.js "Trip to Goa from Mumbai, 12 Oct to 15 Oct, budget 30000 for 2 travelers"
+node src/run-agent.js --to Goa --from Mumbai --start-date 2026-10-12 --end-date 2026-10-15 --budget 30000 --travelers 2
+node src/run-agent.js --to Goa --from Mumbai --dry-run   # print the prompt, call nothing
 
-# Or explicit flags (more reliable):
+# Deterministic fallback, no AI/cost — same flags, different engine:
 node src/index.js --to Goa --from Mumbai --start-date 2026-10-12 --end-date 2026-10-15 --budget 30000 --travelers 2
-
-# See the plan without touching webcmd or any real site at all:
 node src/index.js --to Goa --from Mumbai --dry-run
 ```
 
-Run `node src/index.js --help` for the full flag list (`--profile`,
-`--trip-name`, `--out-dir`, `--skip`, etc.).
+Run `node src/run-agent.js --help` (or `src/index.js --help`) for the full
+flag list — both share the same parser: `--profile`, `--trip-name`,
+`--out-dir`, `--skip`, plus `run-agent.js`-only `--model` and
+`--max-budget-usd`.
 
-`--dry-run` is the safe way to sanity-check a change: it prints every URL and
-Session name the run would use without invoking `webcmd` at all.
+`--dry-run` is the safe way to sanity-check a change: it prints every URL/
+prompt and Session name the run would use without invoking `webcmd` (or, for
+`run-agent.js`, `claude`) at all.
+
+## Using your own Chrome identity (optional)
+
+A webcmd **Profile** is not your regular, already-signed-in desktop
+Chrome — it's an isolated Webcmd-managed Chrome identity that starts
+completely blank. That's why every site sees a run as a fresh guest by
+default, regardless of who you're actually signed in as elsewhere.
+
+Both entry points now resolve which Profile to use the same way
+(`src/lib/profile.js`), unless you pass `--profile <name>` explicitly:
+
+1. Use the **`parthnotparth.gmail.com`** Profile if it already exists.
+2. Otherwise fall back to the guest **`travel-agent`** Profile (created
+   automatically, never signed into anything).
+
+Creating the `parthnotparth.gmail.com` alias alone (which happens
+automatically the first time it's needed) does **not** sign it into
+anything — it's still a blank profile until you complete a one-time,
+interactive sign-in inside it:
+
+```bash
+# 1. Create the alias if it doesn't exist yet, and open a session in it.
+webcmd profile create parthnotparth.gmail.com   # no-op if it already exists
+webcmd --profile parthnotparth.gmail.com session create "auth-setup" -f json
+# → note the returned session id, e.g. "auth-setup-a1"
+
+# 2. Open a real, visible Chrome window in that session and navigate to a
+#    sign-in page — do this for Google itself, and separately for any
+#    travel site you want to already be logged into (MakeMyTrip, etc.).
+webcmd --profile parthnotparth.gmail.com --session auth-setup-a1 browser run --stdin <<'JS'
+await page.goto('https://accounts.google.com/');
+return { url: page.url() };
+JS
+
+# 3. Sign in by hand in the Chrome window that opens (email, password, 2FA —
+#    never paste credentials into a webcmd command or into chat). Repeat
+#    step 2's `page.goto` with a different site's login page, in the same
+#    session, for each site you want persistently signed in.
+
+# 4. Leave the session open, or close just this setup session once done —
+#    the sign-in state stays with the Profile either way:
+webcmd --profile parthnotparth.gmail.com session close auth-setup-a1
+```
+
+From then on, any run of `run-agent.js`/`index.js` that resolves to this
+Profile carries those cookies. **Caveat, confirmed live on 2026-09-12:**
+this does not eliminate bot-detection walls like Skyscanner's PerimeterX
+check — an established, human-browsed profile may look somewhat less
+suspicious than a completely fresh one, but it's not a guaranteed fix, and
+signing into Google alone doesn't log you into unrelated travel sites (you'd
+need to sign into each of those separately, in the same Profile, the same
+way).
 
 ## What actually happens per category
 
-For each of Skyscanner (flights), ixigo Trains (trains), JustDial (cabs),
+For each of ixigo Flights (flights), ixigo Trains (trains), JustDial (cabs),
 and MakeMyTrip + Goibibo (hotels):
 
 1. Create a dedicated webcmd **Session** (one Session per platform — see
@@ -160,11 +246,23 @@ level for exactly this reason:
 
 | Confidence | Platforms | Meaning |
 | --- | --- | --- |
-| MEDIUM | ixigo Trains | Its homepage alone yields real fare data — confirmed live. |
-| LOW | Skyscanner, JustDial, MakeMyTrip, Goibibo | Deep link and/or homepage load, but the real prices are behind a search interaction a static scrape can't do — confirmed live; needs `agent-prompt.md` run for real, or hand-verified per-site selectors. |
+| MEDIUM | ixigo Flights, ixigo Trains | Deep link returns real, correct data with no CAPTCHA — confirmed live for both. |
+| LOW | JustDial, MakeMyTrip, Goibibo | Homepage loads, but the real prices are behind a search interaction a static scrape can't do — confirmed live; needs `agent-prompt.md`/`run-agent.js` run for real, or hand-verified per-site selectors. |
 
 Whatever the confidence, the agent still opens *a* tab for every platform —
 worst case it's the homepage instead of a pre-filled search.
+
+**Site list update (post-CAPTCHA-fix), re-verified live:** Skyscanner was
+replaced with ixigo Flights for the flights category, specifically because
+of the PerimeterX finding above — every "Skyscanner" reference in this
+section describes what was actually tested and found (kept as an accurate
+record), not the current site list. `src/lib/sites.js`, `src/lib/prompt.js`,
+and `agent-prompt.md` all use ixigo Flights now. Re-tested with
+`src/index.js` afterward (`--to Goa --from Mumbai --start-date 2026-10-12`):
+**no CAPTCHA, and it returned a genuine, correct price** — ₹3,915, a
+non-stop IndiGo flight, Mumbai (BOM) → Goa (GOI) — on the very first try,
+better than any other platform tested so far including ixigo Trains (which
+needed the line-splitting fix first). Confidence bumped to MEDIUM.
 
 ## Why one Session per platform (not one Session, many tabs)
 
@@ -185,7 +283,7 @@ output ends with a list of every Session it left open, e.g.:
 
 ```
 === RETAINED SESSIONS/TABS (left open on purpose) ===
-  [flights] Skyscanner — profile "travel-agent", session "travel-goa-1234-flights-skyscanner"
+  [flights] ixigo Flights — profile "travel-agent", session "travel-goa-1234-flights-ixigo-flights"
   ...
 ```
 
@@ -220,14 +318,14 @@ See `src/lib/types.js` for full JSDoc typedefs. Shape:
   "results": [
     {
       "category": "flights",
-      "platform": "Skyscanner",
-      "platformId": "skyscanner",
-      "url": "https://www.skyscanner.net/...",
-      "homepage": "https://www.skyscanner.net/",
-      "usedFallbackHomepage": false,
-      "confidence": "MEDIUM",
+      "platform": "ixigo Flights",
+      "platformId": "ixigo-flights",
+      "url": "https://www.ixigo.com/flights",
+      "homepage": "https://www.ixigo.com/flights",
+      "usedFallbackHomepage": true,
+      "confidence": "LOW",
       "profile": "travel-agent",
-      "sessionId": "travel-goa-1234-flights-skyscanner",
+      "sessionId": "travel-goa-1234-flights-ixigo-flights",
       "candidates": [{ "title": "...", "price": 4523, "currency": "INR", "rawLine": "..." }],
       "pick": { "title": "...", "price": 4523, "currency": "INR", "rawLine": "..." },
       "error": null,
@@ -236,7 +334,7 @@ See `src/lib/types.js` for full JSDoc typedefs. Shape:
     // one entry per platform per category
   ],
   "places": { "query": "things to do in Goa", "url": "https://www.google.com/search?q=...", "shortlist": ["...", "..."], "sessionId": "..." },
-  "openTabs": [{ "profile": "travel-agent", "sessionId": "...", "category": "flights", "platform": "Skyscanner" }]
+  "openTabs": [{ "profile": "travel-agent", "sessionId": "...", "category": "flights", "platform": "ixigo Flights" }]
 }
 ```
 
@@ -248,9 +346,10 @@ anything from this file; it's a standalone step (see `../plan.md`).
 
 ## Known gaps / next steps (for whoever tests this)
 
-- **Run `agent-prompt.md` for real.** Live testing on 2026-09-12 (see above)
-  confirmed the gap it's meant to close: Skyscanner, JustDial, MakeMyTrip,
-  and Goibibo all need an actual search interaction (type origin/
+- **Run `agent-prompt.md`/`run-agent.js` for the rest of the categories.**
+  Live testing on 2026-09-12 (see above) confirmed the gap it's meant to
+  close: ixigo Flights, JustDial, MakeMyTrip, and Goibibo all need an actual
+  search interaction (type origin/
   destination, pick a date, submit) to reach real prices, and a static
   regex-over-readable-text scrape structurally can't do that. This needs
   either an AI agent (path 1) or hand-verified per-site selectors (below) —

@@ -7,9 +7,12 @@ script. Give it this prompt (filled in with real trip details) and let it
 drive the browser adaptively — reading whatever the live page actually shows
 and deciding what to click/type, the way `docs/agent-prompts.mdx` describes.
 
-See `README.md` → "Two ways to run this" for why this exists alongside
-`src/index.js`, and for what live testing on 2026-09-12 already confirmed
-and disproved about specific URLs.
+See `README.md` → "Three ways to run this" for why this exists alongside
+`src/index.js`, and "Verified live (2026-09-12)" for what live testing
+already confirmed and disproved about specific URLs — including why
+Skyscanner was dropped for flights in favor of ixigo Flights (its deep link
+*and* homepage both triggered a PerimeterX bot-check, once even
+mid-interaction; ixigo.com never showed a CAPTCHA in any test).
 
 ## Template (fill in the placeholders)
 
@@ -22,7 +25,7 @@ For each of these four categories, use a separate Webcmd Session
 (travel-<destination-slug>-<category>-<platform>) so every tab stays open
 side by side:
 
-1. Flights — Skyscanner (skyscanner.net)
+1. Flights — ixigo Flights (ixigo.com/flights)
 2. Trains — ixigo Trains (ixigo.com/trains)
 3. Cabs — JustDial (justdial.com), searching for cab/outstation-rental
    operators in {DESTINATION}
@@ -92,9 +95,12 @@ For each of these four categories, use a separate Webcmd Session
 
 `src/index.js` (the deterministic script) can only do what its hardcoded
 URLs and regexes anticipated — live testing on 2026-09-12 immediately found
-a case that breaks (Skyscanner's deep link → CAPTCHA) that this prompt
-handles naturally by falling back to "search the homepage like a person
-would." That adaptability — not needing to know a site's exact selectors or
+a case that breaks (Skyscanner's deep link *and* its homepage → a PerimeterX
+CAPTCHA, once even mid-interaction) that this prompt handles naturally by
+recognizing the block and reporting it honestly instead of guessing a price.
+Skyscanner was since dropped from the site list entirely in favor of ixigo
+Flights, but the same class of surprise can happen on any site at any
+time — that adaptability — not needing to know a site's exact selectors or
 URL scheme ahead of time — is the actual point of webcmd, per
 `docs/concepts.mdx`: *"You do not need to describe selectors or browser
 steps; the agent determines those from the live website."* The script is

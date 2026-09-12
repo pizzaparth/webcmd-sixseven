@@ -13,7 +13,8 @@ import { parseCliArgs } from './lib/args.js';
 import { runTrip } from './lib/orchestrator.js';
 import { printComparisonTables, printPlaces, printOpenTabsSummary } from './lib/report.js';
 import { buildTripData, writeTripData } from './lib/store.js';
-import { checkWebcmdVersion, runDoctor, ensureProfile } from './lib/webcmd.js';
+import { checkWebcmdVersion, runDoctor } from './lib/webcmd.js';
+import { resolveProfile, PERSONAL_PROFILE, GUEST_PROFILE } from './lib/profile.js';
 
 async function preflight() {
   try {
@@ -48,7 +49,7 @@ async function main() {
     return;
   }
 
-  const { intent, profile, tripName, outDir, skip, dryRun } = parsed;
+  const { intent, profile: profileFlag, tripName, outDir, skip, dryRun } = parsed;
 
   console.log('Travel Concierge Agent');
   console.log(`  Destination: ${intent.destination}`);
@@ -56,14 +57,29 @@ async function main() {
   if (intent.startDate) console.log(`  Dates: ${intent.startDate}${intent.endDate ? ` -> ${intent.endDate}` : ''}`);
   if (intent.budget != null) console.log(`  Budget: ${intent.currency} ${intent.budget}`);
   console.log(`  Travelers: ${intent.travelers}`);
-  console.log(`  Profile: ${profile}`);
+
+  let profile;
+  if (dryRun) {
+    // Dry run makes zero webcmd calls, including `profile list` — so the
+    // resolved-at-runtime choice is only described here, not looked up.
+    profile = profileFlag || GUEST_PROFILE;
+    console.log(
+      `  Profile: ${profileFlag || `${PERSONAL_PROFILE} if it exists, else guest "${GUEST_PROFILE}" (resolved at runtime, not looked up in a dry run)`}`,
+    );
+  } else {
+    await preflight();
+    const resolved = await resolveProfile(profileFlag);
+    profile = resolved.profile;
+    const sourceNote =
+      resolved.source === 'personal'
+        ? ' (your account)'
+        : resolved.source === 'guest-fallback'
+          ? ' (guest — see README to set up your account)'
+          : '';
+    console.log(`  Profile: ${profile}${sourceNote}`);
+  }
   if (skip.length) console.log(`  Skipping: ${skip.join(', ')}`);
   console.log(dryRun ? '  Mode: DRY RUN (no webcmd commands will run)\n' : '');
-
-  if (!dryRun) {
-    await preflight();
-    await ensureProfile(profile);
-  }
 
   const { tripSlug, results, places, openTabs } = await runTrip({ intent, profile, tripName, skip, dryRun });
 

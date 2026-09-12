@@ -27,8 +27,8 @@
 /**
  * @typedef {Object} CategoryResult
  * @property {string} category "flights" | "trains" | "cabs" | "hotels"
- * @property {string} platform Display name, e.g. "Skyscanner".
- * @property {string} platformId Slug, e.g. "skyscanner".
+ * @property {string} platform Display name, e.g. "ixigo Flights".
+ * @property {string} platformId Slug, e.g. "ixigo-flights".
  * @property {string} url The URL actually opened.
  * @property {string} homepage
  * @property {boolean} usedFallbackHomepage True if no deep link worked and the homepage was opened instead.
