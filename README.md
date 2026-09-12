@@ -1,160 +1,98 @@
-<img width="1280" height="640" alt="Webcmd — stop paying agents to rediscover the web" src="docs/readme-hero-v2.png" />
+<img width="1200" height="400" alt="Travel Concierge Agent: search real travel sites, compare prices in one place, pay once" src="docs/travel-agent-hero.svg" />
 
+# Travel Concierge Agent
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/@agentrhq/webcmd">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@agentrhq/webcmd.svg?style=for-the-badge&color=1E88E5&labelColor=000000">
-  </a>
-  <a href="https://webcmd.dev/docs">
-    <img alt="Documentation" src="https://img.shields.io/badge/docs-webcmd.dev-7C3AED.svg?style=for-the-badge&labelColor=000000">
-  </a>
-  <a href="https://github.com/agentrhq/webcmd/blob/main/LICENSE">
-    <img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-1E88E5.svg?style=for-the-badge&labelColor=000000">
-  </a>
-  <a href="https://discord.gg/9YP2C9tvMp">
-    <img alt="Join the community on Discord" src="https://img.shields.io/badge/Join%20the%20community-5865F2.svg?style=for-the-badge&logo=discord&logoColor=white&labelColor=000000&logoWidth=20">
-  </a>
-  <a href="https://x.com/agentrhq">
-    <img alt="Follow AgentR on X" src="https://img.shields.io/badge/Built%20by%20%40agentrhq-000000.svg?style=for-the-badge&logo=x&logoColor=white&labelColor=000000&logoWidth=20">
-  </a>
-</p>
+Booking a trip means visiting a different site for flights, trains, cabs,
+and hotels, comparing prices manually across tabs, then entering the same
+name, contact, and payment details on every single site before you can pay.
 
-# Webcmd
+Travel Concierge Agent takes one plain-language trip description, searches
+real flights, trains, cabs, and hotel sites for it, and brings every result
+into a single price comparison page. Pick the option you want per category,
+then enter your details once, through a single payment screen, instead of
+repeating them on each platform's own checkout.
 
-**Self-learning browser infra for AI agents.**
+<img width="1200" height="300" alt="Three step flow: search real sites, compare prices, pay once" src="docs/travel-agent-flow.svg" />
 
-Webcmd learns the navigational context of websites as agents use them, then
-turns that knowledge into local memory for faster, cheaper, more reliable
-browser automation. The goal is simple: stop making agents rediscover the same
-sites on every run and cut browser-agent token spend by up to 90%.
+## What it does
 
-Webcmd pairs live browser control with a self-learning memory layer:
+- **Search** — one trip description (destination, dates, budget,
+  travelers) drives a live search across ixigo Flights, ixigo Trains,
+  JustDial, MakeMyTrip, and Goibibo, plus a plain Google search for places
+  to explore at the destination.
+- **Compare** — every platform's result lands on one page: platform,
+  price, and a short description, grouped by category, with a button to
+  choose the one you want.
+- **Pay once** — a single details-and-payment screen collects name,
+  contact, traveler information, and payment details exactly once, through
+  one Razorpay-style checkout, instead of five separate ones. A voice-fill
+  option can walk you through the form by speaking your answers.
 
-| Layer | Scenario | What Webcmd Helps With |
-| --- | --- | --- |
-| 0. Live browser control | The site is unfamiliar. | Use `webcmd browser` to inspect, click, type, extract, capture network calls, and complete the task in a real browser. |
-| 1. Sitemap memory | The site is familiar, but the action space is not fully known. | Capture an agent-facing sitemap of observed pages, states, actions, workflows, APIs, pitfalls, and fallback paths. |
+## How it's built
 
-## Demo
+The search step is a browser agent built on
+[webcmd](https://github.com/agentrhq/webcmd), the self-learning browser
+infrastructure this repository is built on. The agent is driven by Claude:
+given the trip description, it loads webcmd's browser skill and drives a
+real Chrome session itself, deciding what to click and type on each live
+page rather than following a fixed script. The comparison page and the
+details-and-payment page are a small static Node website that reads the
+agent's output and renders it.
 
-https://github.com/user-attachments/assets/bdb65307-9e2a-4d58-9175-45d59528ae37
+## Setup
 
-## Quick Start
+Requirements: Node.js 20.6 or later, and the [Claude Code](https://claude.com/claude-code)
+CLI, signed in.
 
-### Agent prompt
+1. Install webcmd and confirm the browser runtime is ready:
 
-```text
-Fetch and follow https://raw.githubusercontent.com/agentrhq/webcmd/main/start.md to set up Webcmd end to end.
-```
+   ```bash
+   npm install -g @agentrhq/webcmd
+   webcmd doctor
+   ```
 
-### Manual
+2. Install the browser skill the agent uses:
 
-Webcmd requires Node.js 20.6+.
+   ```bash
+   webcmd skills add
+   ```
 
-```bash
-npm install -g @agentrhq/webcmd
-webcmd skills add
-```
+   Choose Claude when prompted.
 
-When prompted, choose Claude, Codex, another supported harness, or a custom
-skills path. That installs exactly one skill, `webcmd-browser`.
+3. Install the website's dependencies:
 
-Load or tag `webcmd-browser` only for live browser work, then describe the
-outcome you want. Installation and setup commands do not require that skill.
+   ```bash
+   cd travel-agent
+   npm install
+   ```
 
-```text
-Use webcmd to research the latest discussions about browser automation across Hacker News and Reddit, then return a concise comparison with source links.
-```
+## Running it
 
-## What You Can Ask
-
-- “Use webcmd to research agentic browser automation on PubMed and return the title, authors, publication date, abstract, and URL for each result.”
-- “Use webcmd to find active AI infrastructure companies in the YC company directory and return the company, batch, description, location, profile URL, and source links. Keep it read-only.”
-- “Use webcmd to look up parts on Grainger by part number and return price, stock, minimum order quantity, lead time, and product URL.”
-- “Use webcmd with my logged-in `work` profile to summarize unread LinkedIn messages from the last seven days and return the sender, subject or opening text, received time, and conversation URL.”
-- “Use webcmd to check Grainger part prices and SAP Ariba purchase-order status, then return a combined summary.”
-
-## See It in Action
-
-```text
-Use webcmd with my logged-in `social` profile to collect my recent X bookmarks and return the author, text, and URL.
-```
-
-The agent uses the logged-in profile to complete the task in a real browser.
-Along the way, Webcmd quietly retains useful navigation context so later agents
-can avoid repeating the same exploration.
-
-## Where Webcmd Works
-
-Webcmd can work through authenticated browser sessions across research, social,
-AI, shopping, and booking products.
-
-| Group | Supported surfaces | Representative outcomes |
-| --- | --- | --- |
-| research and communities | Hacker News, Reddit, PubMed | Compare current discussions, find primary research, and return concise summaries with source links. |
-| social and professional | X/Twitter, LinkedIn, TikTok | Collect bookmarks, monitor public posts, or research people and creators with a named profile when needed. |
-| AI tools | ChatGPT, Claude, Gemini, NotebookLM | Retrieve conversations, research outputs, notebooks, and generated materials from the tools you already use. |
-| shopping and bookings | Amazon, Blinkit, Zepto, BigBasket, District, Practo | Compare products, availability, prices, appointments, events, and delivery options. |
-
-This list is illustrative. Webcmd can operate other websites through the same
-live browser workflow.
-
-## How Self-Learning Works
-
-<img width="1672" height="941" alt="How Webcmd learns: load memory, use the live web, keep useful learnings, and help the next agent" src="docs/readme-self-learning.png" />
-
-Learning stays quiet and selective: the live browser is always truth, Webcmd
-never explores just to learn, and a memory failure never blocks the task. First
-access may use a Webcmd Cloud seed; subsequent learning stays local.
-
-For local, multi-step browser exploration, agents can send one sandboxed
-Playwright-style program to an explicit browser session:
+From the `travel-agent` directory:
 
 ```bash
-webcmd --profile work session create "Work Project" -f json
-# id: work-project-k7
-webcmd --profile work --session work-project-k7 browser tabs
-webcmd --profile work --session work-project-k7 browser run --file explore.js
-printf 'return await page.title();' \
-  | webcmd --profile work --session work-project-k7 browser run --stdin
-webcmd --profile work session close work-project-k7
+# Search: describe the trip in plain language
+node src/run-agent.js "Trip to Goa from Mumbai, 12 Oct to 15 Oct, budget 30000 for 2 travelers"
+
+# or with explicit fields
+node src/run-agent.js --to Goa --from Mumbai --start-date 2026-10-12 --end-date 2026-10-15 --budget 30000 --travelers 2
 ```
 
-Profiles are cookie jars; Sessions are independent browser windows within a
-profile, so Session IDs are immutable, Profile-scoped, and safe to reuse for
-that Session's lifetime. Parallel agents should create separate Sessions.
-Raw browser commands require an explicit readable Session ID.
+This writes the results to `travel-agent/output/<trip>.json`. Then launch
+the website to compare and pay:
 
-## Benchmarks
+```bash
+node web/server.js
+```
 
-On [BU Bench V1](https://github.com/browser-use/benchmark#bu-bench-v1), a
-100-task browser automation benchmark, Webcmd recorded the highest accuracy and
-lowest estimated controller cost per completed task, and fewest agent turns per
-completed task in this comparison.
+Open `http://127.0.0.1:4173/` to compare prices, choose a platform per
+category, and continue to the details-and-payment page.
 
-![BU Bench V1 comparison: webcmd leads accuracy at 67%, cost per completed task at $0.255, and agent turns per completed task at 9.8](./benchmarks/charts/bu-bench-readme.svg)
+`node src/run-agent.js --help` lists every flag, including `--skip` to
+leave out a category and `--dry-run` to preview a run without calling
+anything.
 
-All tools used the same Pi controller, controller model, Codex `gpt-5.4` judge,
-and CloakBrowser engine. This is a stronger judge than the original BU Bench
-setup, whose [current runner uses Gemini 2.5 Flash](https://github.com/browser-use/benchmark/blob/main/run_eval.py#L37-L38).
-Accuracy is passed tasks out of 100. Cost and agent turns are averaged over
-completed tasks; cost excludes judge usage. See the
-[benchmark report](./benchmarks/README.md) for category results, methodology,
-architectural analysis, and reproduction steps.
+## Credits
 
-## Learn More
-
-Webcmd Cloud can run supported commands and browser sessions on hosted infrastructure. It is in active development and is not yet stable.
-
-- [Prompt Cookbook](https://webcmd.dev/docs/agent-prompts)
-- [How Webcmd Works](https://webcmd.dev/docs/concepts)
-- [Local or Cloud](https://webcmd.dev/docs/local-or-cloud)
-- [Command Surface](https://webcmd.dev/docs/cli-reference)
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
-
-## License
-
-Released under the terms in [`LICENSE`](./LICENSE).
+Built on [webcmd](https://github.com/agentrhq/webcmd) by AgentR, licensed
+under Apache 2.0. See [`LICENSE`](./LICENSE).

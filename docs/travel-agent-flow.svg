@@ -1,0 +1,31 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Three step flow: search real sites, compare prices, pay once">
+  <rect width="1200" height="300" fill="#0f1115"/>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#ffb224"/>
+    </marker>
+  </defs>
+
+  <rect x="40" y="90" width="330" height="150" rx="10" fill="#171a21" stroke="#2c313d"/>
+  <text x="205" y="140" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#e8eaf0">1. Search</text>
+  <text x="205" y="170" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" fill="#9aa3b2">One trip description.</text>
+  <text x="205" y="192" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" fill="#9aa3b2">Real flight, train, cab, and</text>
+  <text x="205" y="214" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" fill="#9aa3b2">hotel sites, searched live.</text>
+
+  <path d="M 385 165 L 425 165" stroke="#ffb224" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="435" y="90" width="330" height="150" rx="10" fill="#171a21" stroke="#2c313d"/>
+  <text x="600" y="140" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#e8eaf0">2. Compare</text>
+  <text x="600" y="170" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" fill="#9aa3b2">One page, every platform's</text>
+  <text x="600" y="192" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" fill="#9aa3b2">price side by side.</text>
+  <text x="600" y="214" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" fill="#9aa3b2">Choose per category.</text>
+
+  <path d="M 780 165 L 820 165" stroke="#ffb224" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="830" y="90" width="330" height="150" rx="10" fill="#171a21" stroke="#ffb224" stroke-width="2"/>
+  <text x="995" y="140" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#ffb224">3. Pay once</text>
+  <text x="995" y="170" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" fill="#9aa3b2">One details form, one</text>
+  <text x="995" y="192" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" fill="#9aa3b2">Razorpay-style checkout,</text>
+  <text x="995" y="214" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" fill="#9aa3b2">instead of separate ones per site.</text>
+</svg>
