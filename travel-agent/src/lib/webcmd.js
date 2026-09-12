@@ -9,12 +9,68 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const execFileAsync = promisify(execFile);
 
-const WEBCMD_BIN = process.env.WEBCMD_BIN || 'webcmd';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** `dist/src/main.js` inside a webcmd package/checkout root, if it's built. */
+function packageEntry(root) {
+  const entry = path.join(root, 'dist', 'src', 'main.js');
+  return existsSync(entry) ? entry : null;
+}
+
+/** Scans PATH for a globally-installed @agentrhq/webcmd next to its bin dir. */
+function globalPackageEntry() {
+  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
+    if (!dir) continue;
+    const entry =
+      // Windows: <prefix>/webcmd.cmd next to <prefix>/node_modules/...
+      packageEntry(path.join(dir, 'node_modules', '@agentrhq', 'webcmd')) ||
+      // POSIX: <prefix>/bin/webcmd next to <prefix>/lib/node_modules/...
+      packageEntry(path.join(dir, '..', 'lib', 'node_modules', '@agentrhq', 'webcmd'));
+    if (entry) return entry;
+  }
+  return null;
+}
+
+/**
+ * How to invoke webcmd as an argv pair.
+ *
+ * npm installs the `webcmd` bin on Windows as a `webcmd.cmd` shim, which Node
+ * cannot execFile directly — it fails with ENOENT and every browser command
+ * in this project dies at preflight. So rather than exec the shim, resolve
+ * the package's JS entry point and run it with this process's own Node. Falls
+ * back to a bare `webcmd` on PATH when no package directory can be found
+ * (fine on POSIX, where the bin is a real executable script).
+ */
+let resolved = null;
+export function resolveWebcmd() {
+  if (resolved) return resolved;
+  const override = process.env.WEBCMD_BIN;
+  if (override) {
+    resolved = override.endsWith('.js')
+      ? { file: process.execPath, prefix: [override] }
+      : { file: override, prefix: [] };
+    return resolved;
+  }
+  const entry =
+    packageEntry(path.resolve(__dirname, '../../..')) || // this repo's own build
+    packageEntry(path.resolve(__dirname, '../../node_modules/@agentrhq/webcmd')) ||
+    globalPackageEntry();
+  resolved = entry ? { file: process.execPath, prefix: [entry] } : { file: 'webcmd', prefix: [] };
+  return resolved;
+}
+
+/** Human-readable form of what resolveWebcmd() picked — for error messages. */
+export function describeWebcmd() {
+  const { file, prefix } = resolveWebcmd();
+  return prefix.length ? `node ${prefix[0]}` : file;
+}
 
 export class WebcmdError extends Error {
   constructor(message, { command, stdout, stderr, cause } = {}) {
@@ -49,9 +105,10 @@ function tryParseJson(text) {
  * pass `-f json`). Throws WebcmdError with stdout/stderr attached on failure.
  */
 export async function runWebcmd(args, { timeoutMs = 60_000 } = {}) {
-  const command = `${WEBCMD_BIN} ${args.join(' ')}`;
+  const { file, prefix } = resolveWebcmd();
+  const command = `${describeWebcmd()} ${args.join(' ')}`;
   try {
-    const { stdout, stderr } = await execFileAsync(WEBCMD_BIN, args, {
+    const { stdout, stderr } = await execFileAsync(file, [...prefix, ...args], {
       timeout: timeoutMs,
       maxBuffer: 20 * 1024 * 1024,
     });
@@ -74,9 +131,14 @@ export async function checkWebcmdVersion() {
   return runWebcmd(['--version'], { timeoutMs: 15_000 });
 }
 
-/** Runs `webcmd doctor` — the documented pre-flight check before browser work. */
+/**
+ * Runs `webcmd doctor` — the documented pre-flight check before browser work.
+ * Generous timeout on purpose: on a machine that has never run webcmd, this is
+ * where cloakbrowser downloads its Chromium (a few hundred MB), which takes far
+ * longer than a normal doctor run and would otherwise look like a hang.
+ */
 export async function runDoctor() {
-  return runWebcmd(['doctor', '-f', 'json'], { timeoutMs: 30_000 });
+  return runWebcmd(['doctor', '-f', 'json'], { timeoutMs: 10 * 60_000 });
 }
 
 /**

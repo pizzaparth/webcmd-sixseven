@@ -93,10 +93,24 @@ there — which found and fixed three real bugs (below).
 
 ## Prerequisites
 
-- Node.js ≥ 20.6 (no other install step — no `npm install` needed here).
-- `webcmd` installed and working: `npm install -g @agentrhq/webcmd`, then
-  `webcmd doctor` should report OK. See the repo root `README.md` / `start.md`
-  if not.
+- Node.js ≥ 20.6. The agent and the website need no dependencies of their own;
+  `npm install` here is only needed for the optional cloud voice/WhatsApp
+  features (`@anthropic-ai/sdk`).
+- `webcmd` installed and working. Either:
+  - `npm install -g @agentrhq/webcmd`, or
+  - from this repo root, `npm install && npm run build` — the agent finds and
+    uses `dist/src/main.js` directly.
+
+  The agent resolves webcmd's JS entry point and runs it with your own Node
+  rather than exec'ing the `webcmd` bin, because npm installs that bin on
+  Windows as a `.cmd` shim that Node cannot execute directly. Set `WEBCMD_BIN`
+  to override which one it uses.
+- **First run downloads a browser.** `webcmd doctor` fetches a stealth Chromium
+  (a few hundred MB) the first time; it looks like a hang but is not. Run
+  `webcmd doctor` once on its own and let it finish before the first agent run.
+
+Run `npm test` in `travel-agent/` to check the agent's parsing/extraction logic
+and the website's routes without touching the network or a browser.
 
 ## Usage
 

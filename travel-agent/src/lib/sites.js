@@ -69,6 +69,8 @@ export function getProviders(intent) {
 
   const originIata = toIata(intent.origin);
   const destIata = toIata(intent.destination);
+  // ixigo caps a single flight search at 9 adults.
+  const adults = Math.min(Math.max(Number(intent.travelers) || 1, 1), 9);
 
   return {
     flights: [
@@ -90,7 +92,8 @@ export function getProviders(intent) {
         candidates:
           originIata && destIata
             ? [
-                `https://www.ixigo.com/search/result/flight/${originIata}/${destIata}/${formatDDMMYYYY(start)}/1/0/0/E`,
+                // .../<from>/<to>/<date>/<adults>/<children>/<infants>/<class>
+                `https://www.ixigo.com/search/result/flight/${originIata}/${destIata}/${formatDDMMYYYY(start)}/${adults}/0/0/E`,
               ]
             : [],
       },

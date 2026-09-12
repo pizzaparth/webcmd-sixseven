@@ -3,6 +3,19 @@
 // Flags always win over anything guessed from free text.
 
 import { parseArgs } from 'node:util';
+import { parseDateFlexible, formatISO } from './dates.js';
+
+/**
+ * Dates reach the website side as-is (the checkout page binds them to
+ * `<input type="date">`, which silently blanks anything that isn't
+ * YYYY-MM-DD), so normalize here rather than at each consumer. An
+ * unparseable value is passed through untouched instead of dropped.
+ */
+function toIsoDate(input) {
+  if (!input) return null;
+  const parsed = parseDateFlexible(input);
+  return parsed ? formatISO(parsed) : String(input);
+}
 
 const OPTION_SPEC = {
   from: { type: 'string' },
@@ -115,8 +128,8 @@ export function parseCliArgs(argv) {
 
   const destination = values.to || values.destination || guess.destination;
   const origin = values.from || values.origin || guess.origin || null;
-  const startDate = values['start-date'] || guess.startDate || null;
-  const endDate = values['end-date'] || guess.endDate || null;
+  const startDate = toIsoDate(values['start-date'] || guess.startDate);
+  const endDate = toIsoDate(values['end-date'] || guess.endDate);
   const budget = values.budget != null ? Number(values.budget) : guess.budget;
   const travelers = values.travelers != null ? Number(values.travelers) : (guess.travelers || 1);
 

@@ -26,6 +26,20 @@ export function esc(value) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * JSON for embedding in an inline <script>. JSON.stringify leaves `<`
+ * untouched, so a value containing `</script>` would close the element early
+ * and turn page data into markup — platform names and titles here come from
+ * scraped pages, so that is reachable. Also escapes the two line separators
+ * that are valid JSON but not valid JavaScript string literals.
+ */
+export function jsonScript(value) {
+  return JSON.stringify(value === undefined ? null : value)
+    .replace(/</g, '\\u003C')
+    .replace(/>/g, '\\u003E')
+    .replace(/[\u2028\u2029]/g, (c) => (c === '\u2028' ? '\\u2028' : '\\u2029'));
+}
+
 const CSS = `
 :root {
   --bg: #0f1115;

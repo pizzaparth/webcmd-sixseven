@@ -4,7 +4,7 @@
 // the dummy checkout's fake confirmation. Same shared template as the other
 // two pages.
 
-import { renderPage, esc, badge, DEFAULT_LINKS } from './template.js';
+import { renderPage, esc, badge, jsonScript, DEFAULT_LINKS } from './template.js';
 import { formatPrice } from './compare.js';
 
 const CATEGORY_LABEL = { flights: 'Flights', trains: 'Trains', cabs: 'Cabs', hotels: 'Hotels', places: 'Places' };
@@ -118,9 +118,9 @@ export function renderSummaryPage(trip, { mode = 'server', picks = {}, confirmat
 
   const script = `
 (function () {
-  var SERVER_PICKS = ${JSON.stringify(picks || {})};
-  var SERVER_CONFIRMATION = ${JSON.stringify(confirmation || null)};
-  var LABELS = ${JSON.stringify(CATEGORY_LABEL)};
+  var SERVER_PICKS = ${jsonScript(picks || {})};
+  var SERVER_CONFIRMATION = ${jsonScript(confirmation || null)};
+  var LABELS = ${jsonScript(CATEGORY_LABEL)};
   function $(s) { return document.querySelector(s); }
   function fmt(n, cur) { return (cur === 'USD' ? '$' : '\\u20B9') + Number(n).toLocaleString('en-IN'); }
   function read(key) { try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch (e) { return null; } }

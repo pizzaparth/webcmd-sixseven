@@ -4,7 +4,7 @@
 // static "live price" banner up top. Pure function of the data: no I/O here,
 // so server.js and build.js can both use it.
 
-import { renderPage, esc, badge, button, DEFAULT_LINKS } from './template.js';
+import { renderPage, esc, badge, button, jsonScript, DEFAULT_LINKS } from './template.js';
 
 const CATEGORY_ORDER = ['flights', 'trains', 'cabs', 'hotels'];
 const CATEGORY_LABEL = { flights: 'Flights', trains: 'Trains', cabs: 'Cabs', hotels: 'Hotels' };
@@ -224,8 +224,8 @@ export function renderComparisonPage(trip, { mode = 'server', sourceLabel = '', 
 
   const script = `
 (function () {
-  var MODE = ${JSON.stringify(mode)};
-  var RESULTS = ${JSON.stringify(resultsById)};
+  var MODE = ${jsonScript(mode)};
+  var RESULTS = ${jsonScript(resultsById)};
   var picks = {};
 
   // Ticking "last updated" clock. Cosmetic: the price itself is a snapshot.

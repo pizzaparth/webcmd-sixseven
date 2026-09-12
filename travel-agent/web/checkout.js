@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderPage, esc, button, DEFAULT_LINKS } from './template.js';
+import { renderPage, esc, button, jsonScript, DEFAULT_LINKS } from './template.js';
 import { formatPrice, bestTotal } from './compare.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -161,12 +161,12 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
 
   const script = `
 (function () {
-  var MODE = ${JSON.stringify(mode)};
-  var CURRENCY = ${JSON.stringify(currency)};
-  var FALLBACK_TOTAL = ${JSON.stringify(fallbackTotal.total)};
-  var SERVER_PICKS = ${JSON.stringify(picks || {})};
-  var TEST_VALUES = ${JSON.stringify(TEST_VALUES)};
-  var LABELS = ${JSON.stringify(CATEGORY_LABEL)};
+  var MODE = ${jsonScript(mode)};
+  var CURRENCY = ${jsonScript(currency)};
+  var FALLBACK_TOTAL = ${jsonScript(fallbackTotal.total)};
+  var SERVER_PICKS = ${jsonScript(picks || {})};
+  var TEST_VALUES = ${jsonScript(TEST_VALUES)};
+  var LABELS = ${jsonScript(CATEGORY_LABEL)};
 
   function $(sel) { return document.querySelector(sel); }
   function fmt(n) { return (CURRENCY === 'USD' ? '$' : '\\u20B9') + Number(n).toLocaleString('en-IN'); }
@@ -299,7 +299,7 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
   // Engines live in web/voice/client.js (inlined above). Local parsers here
   // are the browser engine's understanding step and the cloud engine's
   // fallback when Claude isn't configured.
-  var VOICE_CONFIG = ${JSON.stringify(mode === 'server' ? voiceConfig : { stt: null, tts: null, llm: null, cloud: false })};
+  var VOICE_CONFIG = ${jsonScript(mode === 'server' ? voiceConfig : { stt: null, tts: null, llm: null, cloud: false })};
 
   var WORD_NUMBERS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, to: 2, too: 2, for: 4, oh: 0 };
   function digitsFrom(text) {

@@ -12,7 +12,8 @@
     "start": "node src/index.js",
     "dry-run": "node src/index.js --dry-run",
     "web": "node web/server.js",
-    "web:build": "node web/build.js"
+    "web:build": "node web/build.js",
+    "test": "node --test \"test/*.test.js\""
   },
   "engines": {
     "node": ">=20.6.0"

@@ -13,19 +13,22 @@ import { parseCliArgs } from './lib/args.js';
 import { runTrip } from './lib/orchestrator.js';
 import { printComparisonTables, printPlaces, printOpenTabsSummary } from './lib/report.js';
 import { buildTripData, writeTripData } from './lib/store.js';
-import { checkWebcmdVersion, runDoctor } from './lib/webcmd.js';
+import { checkWebcmdVersion, runDoctor, describeWebcmd } from './lib/webcmd.js';
 import { resolveProfile, PERSONAL_PROFILE } from './lib/profile.js';
 
 async function preflight() {
   try {
     await checkWebcmdVersion();
   } catch (err) {
-    console.error(`\nCould not run the "webcmd" CLI. Is it installed and on PATH?\n${err.message}\n`);
-    console.error('Install it with: npm install -g @agentrhq/webcmd  (see repo README "Quick Start"), then run `webcmd doctor`.');
+    console.error(`\nCould not run webcmd (tried: ${describeWebcmd()}).\n${err.message}\n`);
+    console.error('Fix it with either:');
+    console.error('  - npm install -g @agentrhq/webcmd   (then re-run; `webcmd doctor` should pass), or');
+    console.error('  - npm install && npm run build      in this repo root, to use its own build.');
     process.exit(1);
   }
 
   try {
+    console.log('  Checking the browser layer (`webcmd doctor`) — the first ever run downloads a browser, which takes a while...');
     const doctor = await runDoctor();
     const failed =
       doctor && (doctor.ok === false || (typeof doctor.status === 'string' && doctor.status.toLowerCase() !== 'ok'));
@@ -35,7 +38,11 @@ async function preflight() {
       console.warn('Fix it and re-run, or continue anyway.\n');
     }
   } catch (err) {
-    console.warn(`Could not run "webcmd doctor" (continuing anyway): ${err.message}`);
+    console.warn(`Could not run "webcmd doctor": ${err.message}`);
+    console.warn(
+      'Continuing anyway, but browser commands will likely fail. If the browser download was still ' +
+        'running, let `webcmd doctor` finish once on its own and re-run.\n',
+    );
   }
 }
 
