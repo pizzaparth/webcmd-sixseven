@@ -8,8 +8,15 @@
 // summary to the local server's memory so the summary page can show it.
 // Card/UPI fields never leave the browser tab.
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { renderPage, esc, button, DEFAULT_LINKS } from './template.js';
 import { formatPrice, bestTotal } from './compare.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Browser-side voice agent (both engines); inlined so static builds work too.
+const VOICE_CLIENT_JS = readFileSync(path.join(__dirname, 'voice/client.js'), 'utf8');
 
 const CATEGORY_LABEL = { flights: 'Flights', trains: 'Trains', cabs: 'Cabs', hotels: 'Hotels' };
 
@@ -40,7 +47,13 @@ function field({ id, label, type = 'text', placeholder = '', value = '', span2 =
  *   `picks` (server mode) is the in-memory selection map from the comparison
  *   page; in static mode the page reads the same thing from sessionStorage.
  */
-export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = DEFAULT_LINKS } = {}) {
+/**
+ * `voice` (server mode) is voiceConfig() from ./voice/providers.js — which
+ * cloud engines are configured; the page offers a Browser/Cloud picker when
+ * any are. Static builds always use the browser engine.
+ */
+export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = DEFAULT_LINKS, voice = null } = {}) {
+  const voiceConfig = voice || { stt: null, tts: null, llm: null, cloud: false };
   const intent = trip.intent || {};
   const fallbackTotal = bestTotal(trip.results || []);
   const currency = fallbackTotal.currency || intent.currency || 'INR';
@@ -67,8 +80,16 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
       <div class="notice" data-voice-panel hidden>
         <div class="row between">
           <span data-voice-status>Voice agent idle.</span>
-          ${button('Stop', { secondary: true, attrs: 'data-voice-stop' })}
+          <div class="row">
+            <label class="small muted" for="voiceEngine">Engine</label>
+            <select id="voiceEngine" data-voice-engine style="width:auto">
+              <option value="browser">Browser (Web Speech, free)</option>
+              ${voiceConfig.cloud ? `<option value="cloud" selected>Cloud (${esc([voiceConfig.stt && `STT ${voiceConfig.stt}`, voiceConfig.tts && `TTS ${voiceConfig.tts}`, voiceConfig.llm && `Claude`].filter(Boolean).join(' · '))})</option>` : ''}
+            </select>
+            ${button('Stop', { secondary: true, attrs: 'data-voice-stop' })}
+          </div>
         </div>
+        ${voiceConfig.cloud ? '' : '<div class="small muted" style="margin-top:6px">Cloud engines are off — add keys to <span class="mono">travel-agent/.env</span> (see VOICE.md) to enable Deepgram/Groq/ElevenLabs + Claude.</div>'}
         <div class="log" data-voice-log></div>
       </div>
       <div class="form-grid" style="margin-top:12px">
@@ -274,18 +295,18 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
     ['cardNumber', 'expiry', 'cvv', 'upi'].forEach(function (id) { setVal(id, ''); });
   });
 
-  // ---- voice agent (Web Speech API, entirely client-side) ---------------
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  var synth = window.speechSynthesis;
-  var voice = { running: false, rec: null };
+  // ---- voice agent ------------------------------------------------------
+  // Engines live in web/voice/client.js (inlined above). Local parsers here
+  // are the browser engine's understanding step and the cloud engine's
+  // fallback when Claude isn't configured.
+  var VOICE_CONFIG = ${JSON.stringify(mode === 'server' ? voiceConfig : { stt: null, tts: null, llm: null, cloud: false })};
 
-  var WORD_NUMBERS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, to: 2, too: 2, for: 4, oh: 0, double: null };
+  var WORD_NUMBERS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, to: 2, too: 2, for: 4, oh: 0 };
   function digitsFrom(text) {
     // "nine eight seven six" / "98 76" / "double nine" -> digit string
     var out = '';
     text.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\\s+/).forEach(function (w, i, arr) {
       if (/^\\d+$/.test(w)) out += w;
-      else if (w === 'double' || w === 'triple') { /* handled by lookahead below */ }
       else if (WORD_NUMBERS[w] != null) {
         var prev = arr[i - 1];
         var times = prev === 'double' ? 2 : prev === 'triple' ? 3 : 1;
@@ -312,91 +333,37 @@ export function renderCheckoutPage(trip, { mode = 'server', picks = {}, links = 
 
   var statusEl = $('[data-voice-status]');
   var logEl = $('[data-voice-log]');
-  function log(text, who) { var d = document.createElement('div'); d.className = who || ''; d.textContent = (who === 'you' ? 'You: ' : 'Agent: ') + text; logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; }
-  function highlight(id) {
-    document.querySelectorAll('.field.active').forEach(function (f) { f.classList.remove('active'); });
-    var f = document.querySelector('[data-field="' + id + '"]');
-    if (f) { f.classList.add('active'); f.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
-  }
+  var agent = window.createVoiceAgent({
+    steps: STEPS,
+    config: VOICE_CONFIG,
+    lang: 'en-IN',
+    ui: {
+      log: function (text, who) { var d = document.createElement('div'); d.className = who || ''; d.textContent = (who === 'you' ? 'You: ' : 'Agent: ') + text; logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; },
+      status: function (text) { statusEl.textContent = text; },
+      highlight: function (id) {
+        document.querySelectorAll('.field.active').forEach(function (f) { f.classList.remove('active'); });
+        var f = document.querySelector('[data-field="' + id + '"]');
+        if (f) { f.classList.add('active'); f.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+      },
+      clearHighlight: function () { document.querySelectorAll('.field.active').forEach(function (f) { f.classList.remove('active'); }); },
+      setVal: setVal, val: val, showTab: showTab, getMethod: function () { return method; },
+    },
+  });
 
-  function speak(text) {
-    return new Promise(function (resolve) {
-      log(text, 'agent');
-      if (!synth) return resolve();
-      synth.cancel();
-      var u = new SpeechSynthesisUtterance(text);
-      u.lang = 'en-IN'; u.rate = 1.02;
-      u.onend = resolve; u.onerror = resolve;
-      synth.speak(u);
-    });
-  }
-
-  function listen() {
-    return new Promise(function (resolve) {
-      var rec = new SR();
-      voice.rec = rec;
-      rec.lang = 'en-IN'; rec.interimResults = false; rec.maxAlternatives = 3; rec.continuous = false;
-      var done = false;
-      function finish(v) { if (!done) { done = true; voice.rec = null; resolve(v); } }
-      rec.onresult = function (e) { finish(Array.prototype.map.call(e.results[0], function (a) { return a.transcript; })); };
-      rec.onerror = function (e) { if (e.error !== 'aborted') log('(mic error: ' + e.error + ')', 'agent'); finish(null); };
-      rec.onend = function () { finish(null); };
-      statusEl.textContent = 'Listening\\u2026';
-      try { rec.start(); } catch (e) { finish(null); }
-    });
-  }
-
-  async function runVoice() {
-    if (!SR || !synth) {
-      statusEl.textContent = 'This browser does not support the Web Speech API — use Chrome, or fill the form by hand.';
-      return;
-    }
-    voice.running = true;
+  $('[data-voice-start]').addEventListener('click', function () {
+    if (agent.isRunning()) return;
     $('[data-voice-panel]').hidden = false;
     logEl.innerHTML = '';
-    await speak('Hi. I will ask a few questions and fill the form for you. You can correct anything by hand afterwards.');
-    for (var i = 0; i < STEPS.length && voice.running; i++) {
-      var step = STEPS[i];
-      if (step.when && step.when !== method) continue;
-      if (step.id !== '__method') highlight(step.id);
-      var value = null, attempts = 0;
-      await speak(step.ask);
-      while (value == null && attempts < 3 && voice.running) {
-        attempts++;
-        var alternatives = await listen();
-        if (!voice.running) break;
-        if (!alternatives) { if (attempts < 3) await speak('I did not catch that. ' + (step.retry || step.ask)); continue; }
-        log(alternatives[0], 'you');
-        for (var a = 0; a < alternatives.length && value == null; a++) value = step.parse(alternatives[a]);
-        if (value == null && attempts < 3) await speak(step.retry || 'Sorry, please say that again.');
-      }
-      if (value == null) { await speak('Skipping that one — you can type it in.'); continue; }
-      if (step.apply) step.apply(value); else setVal(step.id, value);
-      statusEl.textContent = 'Filled ' + (step.id === '__method' ? 'payment method' : step.id) + '.';
-    }
-    document.querySelectorAll('.field.active').forEach(function (f) { f.classList.remove('active'); });
-    if (voice.running) {
-      await speak('All done. Please check the fields, then press Pay. Remember, this is a dummy payment.');
-      statusEl.textContent = 'Voice fill complete — review the fields, then Pay.';
-    }
-    voice.running = false;
-  }
-
-  $('[data-voice-start]').addEventListener('click', function () { if (!voice.running) runVoice(); });
-  $('[data-voice-stop]').addEventListener('click', function () {
-    voice.running = false;
-    if (voice.rec) { try { voice.rec.abort(); } catch (e) {} }
-    if (synth) synth.cancel();
-    statusEl.textContent = 'Voice agent stopped.';
-    document.querySelectorAll('.field.active').forEach(function (f) { f.classList.remove('active'); });
+    agent.run($('[data-voice-engine]').value);
   });
+  $('[data-voice-stop]').addEventListener('click', function () { agent.stop(); });
 })();
 `;
 
   return renderPage({
     title: `Details & Payment — ${intent.destination || 'Trip'}`,
     body,
-    script,
+    script: `${VOICE_CLIENT_JS}\n${script}`,
     activeNav: 'checkout',
     links,
     footer: 'Dummy checkout. No SDK, no gateway, no network call for payment — inputs are discarded when this tab closes.',

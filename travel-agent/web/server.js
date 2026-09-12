@@ -21,8 +21,13 @@ import { fileURLToPath } from 'node:url';
 import { renderComparisonPage } from './compare.js';
 import { renderCheckoutPage } from './checkout.js';
 import { renderSummaryPage } from './summary.js';
-import { createSession, browserRun, ensureProfile } from '../src/lib/webcmd.js';
+import { loadEnv, ENV_FILE } from './env.js';
+import { voiceConfig, transcribe, synthesize, interpret } from './voice/providers.js';
+import { createSession, browserRun, ensureProfile, checkWebcmdVersion } from '../src/lib/webcmd.js';
 import { gotoScript } from '../src/lib/scripts.js';
+import { runTrip } from '../src/lib/orchestrator.js';
+import { buildTripData, writeTripData } from '../src/lib/store.js';
+import { createWhatsAppBot, whatsappConfig } from './whatsapp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUTPUT_DIR = path.resolve(__dirname, '../output');
@@ -74,16 +79,30 @@ function html(res, status, markup) {
   res.end(markup);
 }
 
-async function readBody(req) {
+async function readRaw(req, { maxBytes = 25 * 1024 * 1024 } = {}) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  const text = Buffer.concat(chunks).toString('utf8');
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maxBytes) throw new Error('Request body too large');
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function readBody(req) {
+  const text = (await readRaw(req, { maxBytes: 1024 * 1024 })).toString('utf8');
   return text ? JSON.parse(text) : {};
 }
 
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  const envInfo = loadEnv();
+  const voice = voiceConfig();
+  const whatsapp = whatsappConfig();
+  const baseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '') || `http://127.0.0.1:${opts.port}`;
+  const links = { compare: `${baseUrl}/`, checkout: `${baseUrl}/checkout`, summary: `${baseUrl}/summary` };
   const { file, isSample } = await pickTripFile(opts.file);
   const tripSlug = path.basename(file, '.json');
   const sourceLabel = isSample ? 'sample data' : path.relative(process.cwd(), file);
@@ -113,6 +132,40 @@ async function main() {
       return { opened: false, note: 'webcmd unavailable' };
     }
   }
+
+  // WhatsApp users describe their own trip. If webcmd is usable we run the
+  // real agent for them (minutes); otherwise they get the loaded trip file
+  // as a snapshot so the demo still flows.
+  let webcmdOk = false;
+  if (opts.open) {
+    try {
+      await checkWebcmdVersion();
+      webcmdOk = true;
+    } catch {
+      webcmdOk = false;
+    }
+  }
+  const bot = createWhatsAppBot({
+    links,
+    search: async (intent) => {
+      if (webcmdOk) {
+        const profile = process.env.WEBCMD_PROFILE || 'travel-agent';
+        await ensureProfile(profile);
+        const { tripSlug: slug, results, places, openTabs } = await runTrip({ intent, profile, tripName: `wa-${intent.destination}-${Date.now()}` });
+        const trip = buildTripData({ intent, profile, results, places, openTabs });
+        const written = await writeTripData(trip, { tripSlug: slug });
+        console.log(`[whatsapp] live search written to ${written}`);
+        return { trip, live: true };
+      }
+      return { trip: await loadTrip(file), live: false };
+    },
+    // Mirror the chat's picks/confirmation into the web pages' state so the
+    // summary page on the projector follows what happens on the phone.
+    onPick: (category, pick) => picks.set(category, pick),
+    onConfirm: (c) => {
+      confirmation = c;
+    },
+  });
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -147,9 +200,15 @@ async function main() {
         console.log(`[choose] ${category} → ${result.platform} (${outcome.opened ? 'opened via webcmd' : 'client opens URL'})`);
         return json(res, 200, { ok: true, opened: outcome.opened, url: result.url, note: outcome.note, sessionId: outcome.sessionId || null });
       }
+      // ---- WhatsApp Cloud API webhook (see web/whatsapp.js, WHATSAPP.md) ----
+      if (url.pathname === '/webhooks/whatsapp') {
+        if (!whatsapp.enabled) return json(res, 503, { ok: false, error: 'WhatsApp not configured — set WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN in .env' });
+        if (req.method === 'GET') return bot.verify(url, res);
+        if (req.method === 'POST') return bot.receive(await readRaw(req, { maxBytes: 2 * 1024 * 1024 }), req.headers, res);
+      }
       if (req.method === 'GET' && url.pathname === '/checkout') {
         const trip = await loadTrip(file);
-        return html(res, 200, renderCheckoutPage(trip, { mode: 'server', picks: Object.fromEntries(picks) }));
+        return html(res, 200, renderCheckoutPage(trip, { mode: 'server', picks: Object.fromEntries(picks), voice: voiceConfig() }));
       }
       if (req.method === 'POST' && url.pathname === '/api/confirm') {
         const body = await readBody(req);
@@ -172,6 +231,31 @@ async function main() {
         return json(res, 200, { ok: true, confirmation });
       }
       if (req.method === 'GET' && url.pathname === '/api/confirm') return json(res, 200, { confirmation });
+
+      // ---- voice agent: cloud engines (see web/voice/providers.js, VOICE.md) ----
+      // Keys stay on this server; the browser only ever talks to these routes.
+      if (req.method === 'GET' && url.pathname === '/api/voice/config') return json(res, 200, voiceConfig());
+      if (req.method === 'POST' && url.pathname === '/api/voice/stt') {
+        const audio = await readRaw(req);
+        const mime = (req.headers['content-type'] || 'audio/webm').split(';')[0];
+        const transcript = await transcribe(audio, mime);
+        console.log(`[voice] stt (${voiceConfig().stt}): "${transcript}"`);
+        return json(res, 200, { transcript });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/voice/tts') {
+        const { text } = await readBody(req);
+        if (!text || String(text).length > 1000) return json(res, 400, { ok: false, error: 'text required (max 1000 chars)' });
+        const { audio, mime } = await synthesize(String(text));
+        res.writeHead(200, { 'content-type': mime, 'content-length': audio.length, 'cache-control': 'no-store' });
+        return res.end(audio);
+      }
+      if (req.method === 'POST' && url.pathname === '/api/voice/interpret') {
+        const { fieldId, question, transcript, context } = await readBody(req);
+        if (!fieldId || !transcript) return json(res, 400, { ok: false, error: 'fieldId and transcript required' });
+        const result = await interpret({ fieldId, question, transcript, context });
+        console.log(`[voice] interpret ${fieldId}: "${transcript}" -> ${JSON.stringify(result.value)}`);
+        return json(res, 200, result);
+      }
       if (req.method === 'GET' && url.pathname === '/summary') {
         const trip = await loadTrip(file);
         return html(res, 200, renderSummaryPage(trip, { mode: 'server', picks: Object.fromEntries(picks), confirmation }));
@@ -187,6 +271,9 @@ async function main() {
     console.log(`Travel Concierge website`);
     console.log(`  Trip file: ${file}${isSample ? ' (bundled sample — run the agent to replace it)' : ''}`);
     console.log(`  Picks open via: ${opts.open ? 'webcmd (falls back to your browser)' : 'your browser (--no-open)'}`);
+    console.log(`  Voice agent: browser Web Speech${voice.cloud ? ` + cloud (stt ${voice.stt || '-'}, tts ${voice.tts || '-'}, llm ${voice.llm || '-'})` : ' only — no cloud keys in ' + path.relative(process.cwd(), ENV_FILE) + ' (see VOICE.md)'}`);
+    if (envInfo.loaded && envInfo.keys.length) console.log(`  Loaded ${envInfo.keys.length} variable(s) from ${path.relative(process.cwd(), ENV_FILE)}`);
+    console.log(`  WhatsApp: ${whatsapp.enabled ? `webhook at ${baseUrl}/webhooks/whatsapp (number id ${whatsapp.phoneNumberId}, signature check ${whatsapp.signatureCheck ? 'on' : 'OFF'}, search ${webcmdOk ? 'live via webcmd' : 'snapshot from trip file'})` : 'off — set WHATSAPP_* in .env (see WHATSAPP.md)'}`);
     console.log(`  Compare page: http://127.0.0.1:${opts.port}/`);
   });
 }

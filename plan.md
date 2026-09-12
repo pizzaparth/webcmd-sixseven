@@ -3,10 +3,14 @@
 > **Status:** the agent (search + open tabs + CLI comparison table +
 > `output/<trip>.json`) lives in [`travel-agent/`](travel-agent/README.md).
 > The website side — shared dark-theme template, **price comparison page**,
-> **combined details + dummy payment page** (with the Web Speech voice
-> agent), and **summary page** — is built in
-> [`travel-agent/web/`](travel-agent/web/) (`node web/server.js`) and reads
-> that JSON file.
+> **combined details + dummy payment page**, **summary page**, and the
+> **voice agent** (browser Web Speech by default, optional cloud engine —
+> Deepgram/Groq STT, Deepgram/ElevenLabs TTS, Claude for understanding —
+> keyed from `travel-agent/.env`, see [`travel-agent/VOICE.md`](travel-agent/VOICE.md))
+> — is built in [`travel-agent/web/`](travel-agent/web/)
+> (`node web/server.js`) and reads that JSON file. The same flow is also
+> exposed over **WhatsApp** (Meta Cloud API webhook at
+> `/webhooks/whatsapp`, see [`travel-agent/WHATSAPP.md`](travel-agent/WHATSAPP.md)).
 
 ## The Idea
 

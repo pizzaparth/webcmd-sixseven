@@ -51,3 +51,7 @@ benchmarks/datasets/*.json
 !benchmarks/datasets/Stealth_Webcmd.json
 benchmarks/.playwright-cli/
 benchmarks/.playwright/
+
+# Local secrets for the travel-agent voice agent (see travel-agent/.env.example)
+travel-agent/.env
+travel-agent/node_modules/

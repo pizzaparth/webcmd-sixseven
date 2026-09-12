@@ -1,8 +1,9 @@
 # Travel Concierge Agent
 
 The agent half of the hackathon project (see `../plan.md` for the full
-picture). This is a standalone Node script — **zero npm dependencies** — that
-shells out to the `webcmd` CLI to:
+picture). This is a standalone Node script — **zero npm dependencies** for the agent
+and website (the optional cloud voice engine adds `@anthropic-ai/sdk`, see
+`VOICE.md`) — that shells out to the `webcmd` CLI to:
 
 1. Search a real site per category (flights, trains, cabs, hotels) and open
    a tab on the best result it can find. No login, no checkout, no form
@@ -332,6 +333,16 @@ What the page does:
   every Session the search run left open (with links and session ids), and
   the places shortlist.
 
+### WhatsApp channel (`/webhooks/whatsapp`, `web/whatsapp.js`)
+
+The same flow over WhatsApp via the Meta Cloud API: describe a trip →
+comparison as a message + "Choose" list → pick per category (each pick
+replies with the link) → dummy checkout with one *Pay (dummy)* tap. Picks
+and the fake confirmation mirror into the website's summary page. Setup
+(Meta app, your number, tunnel, webhook, free-tier notes):
+**[WHATSAPP.md](WHATSAPP.md)**. Needs `WHATSAPP_TOKEN`,
+`WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` in `.env`.
+
 ### Shared design template (`web/template.js`)
 
 All three pages render through `renderPage()` and the class set in
@@ -359,13 +370,15 @@ banner's best total if nothing was picked).
   number, expiry, CVV and UPI id never leave the tab.
 - **"Fill test values"** drops in obviously-fake data (4111 1111 1111 1111,
   `test@demo`, etc.). Say out loud in the demo that everything is fake.
-- **🎤 Voice fill** uses the browser's Web Speech API (`SpeechSynthesis` to
-  ask, `SpeechRecognition` to listen — Chrome works best, no keys, no
-  backend). It walks name → phone → travelers → card/UPI → the matching
+- **🎤 Voice fill** walks name → phone → travelers → card/UPI → the matching
   payment fields, highlighting the field being filled, retrying up to 3×
   per question and skipping if it still can't parse the answer. Fields stay
-  editable by hand afterwards for corrections. Needs a mic permission the
-  first time; if the API is missing it says so and you fill by hand.
+  editable by hand afterwards. Two engines (see **[VOICE.md](VOICE.md)** for
+  keys, free tiers, and setup): the browser's Web Speech API by default
+  (free, no keys), or — with keys in `.env` — a cloud engine using Deepgram
+  / Groq for speech-to-text, Deepgram / ElevenLabs for the voice, and
+  Claude to turn spoken answers into exact field values. Cloud calls fall
+  back to the browser engine if they fail.
 
 `node web/build.js output/<trip>.json` writes standalone
 `output/<trip>.html` + `.checkout.html` + `.summary.html` instead (no server;
