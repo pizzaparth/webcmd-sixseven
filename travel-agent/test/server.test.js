@@ -34,9 +34,10 @@ before(async () => {
   // Pin the fixture: left to itself the server loads the newest output/*.json,
   // so a real agent run on this machine would otherwise change what is tested.
   // --no-open keeps it hermetic too: no webcmd, no browser, no network.
+  // --no-launch keeps the suite from popping a real browser window on startup.
   server = spawn(
     process.execPath,
-    ['web/server.js', 'web/fixtures/sample-trip.json', '--port', String(PORT), '--no-open'],
+    ['web/server.js', 'web/fixtures/sample-trip.json', '--port', String(PORT), '--no-open', '--no-launch'],
     { cwd: AGENT_ROOT, stdio: ['ignore', 'pipe', 'inherit'] },
   );
   await waitForListen(server);

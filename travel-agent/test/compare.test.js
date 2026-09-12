@@ -92,6 +92,29 @@ test('a scraped title cannot break out of the summary and checkout inline script
   }
 });
 
+test('the comparison page auto-advances to checkout once every category is picked', () => {
+  const html = renderComparisonPage(SAMPLE, { mode: 'server' });
+  // It waits for all categories, so picking flights does not skip the hotel choice.
+  assert.ok(html.includes('var CATEGORIES = ["flights","trains","cabs","hotels"]'));
+  assert.ok(html.includes('CATEGORIES.every('));
+  assert.ok(html.includes('window.location.href = CHECKOUT_URL'));
+  assert.ok(html.includes('var CHECKOUT_URL = "/checkout"'));
+  // …and the user can opt out of the countdown.
+  assert.ok(html.includes('data-autogo-cancel'));
+});
+
+test('auto-advance targets the static filenames in a built site', () => {
+  const links = { compare: 'trip.html', checkout: 'trip.checkout.html', summary: 'trip.summary.html' };
+  const html = renderComparisonPage(SAMPLE, { mode: 'static', links });
+  assert.ok(html.includes('var CHECKOUT_URL = "trip.checkout.html"'));
+});
+
+test('auto-advance only lists categories the trip actually has', () => {
+  const trip = { intent: { destination: 'Goa' }, results: [priced('flights', 'ixigo-flights', 100)] };
+  const html = renderComparisonPage(trip, { mode: 'server' });
+  assert.ok(html.includes('var CATEGORIES = ["flights"]'));
+});
+
 test('a platform with no URL cannot be chosen', () => {
   const trip = { intent: { destination: 'Goa' }, results: [{ ...priced('hotels', 'goibibo', null), url: null }] };
   const html = renderComparisonPage(trip, { mode: 'server' });

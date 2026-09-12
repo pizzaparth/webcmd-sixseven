@@ -218,6 +218,8 @@ export function renderComparisonPage(trip, { mode = 'server', sourceLabel = '', 
       <ul class="list" data-picks-list></ul>
       <div style="margin-top:14px" class="row">
         <a class="btn" href="${esc(links.checkout)}" data-continue hidden>Continue to details &amp; payment</a>
+        <span class="small" data-autogo hidden></span>
+        ${button('Stay here', { secondary: true, attrs: 'data-autogo-cancel hidden' })}
       </div>
     </div>
   </section>`;
@@ -226,7 +228,14 @@ export function renderComparisonPage(trip, { mode = 'server', sourceLabel = '', 
 (function () {
   var MODE = ${jsonScript(mode)};
   var RESULTS = ${jsonScript(resultsById)};
+  var CHECKOUT_URL = ${jsonScript(links.checkout)};
+  // Every category this trip actually has a result for. Auto-advance waits for
+  // all of them so picking flights doesn't skip past the hotel choice.
+  var CATEGORIES = ${jsonScript(groups.map(([category]) => category))};
+  var AUTO_ADVANCE_SECONDS = 5;
   var picks = {};
+  var autoTimer = null;
+  var autoCancelled = false;
 
   // Ticking "last updated" clock. Cosmetic: the price itself is a snapshot.
   var clock = document.querySelector('[data-clock]');
@@ -254,7 +263,47 @@ export function renderComparisonPage(trip, { mode = 'server', sourceLabel = '', 
     cont.hidden = keys.length === 0;
     totalEl.textContent = priced ? fmt(total, cur) : '—';
     try { sessionStorage.setItem('travel-picks', JSON.stringify(picks)); } catch (e) {}
+    maybeAutoAdvance();
   }
+
+  function everyCategoryPicked() {
+    return CATEGORIES.length > 0 && CATEGORIES.every(function (c) { return picks[c]; });
+  }
+
+  function stopAutoAdvance() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    document.querySelector('[data-autogo]').hidden = true;
+    document.querySelector('[data-autogo-cancel]').hidden = true;
+  }
+
+  /** Once every category has a pick, head to the details page on its own. */
+  function maybeAutoAdvance() {
+    if (autoCancelled || !everyCategoryPicked()) return;
+    // Restart on every pick, so switching platforms mid-countdown doesn't
+    // navigate away while the user is still choosing.
+    stopAutoAdvance();
+    var note = document.querySelector('[data-autogo]');
+    var cancel = document.querySelector('[data-autogo-cancel]');
+    var left = AUTO_ADVANCE_SECONDS;
+    note.hidden = false;
+    cancel.hidden = false;
+    note.textContent = 'All set — opening details & payment in ' + left + 's…';
+    autoTimer = setInterval(function () {
+      left--;
+      if (left > 0) {
+        note.textContent = 'All set — opening details & payment in ' + left + 's…';
+        return;
+      }
+      stopAutoAdvance();
+      window.location.href = CHECKOUT_URL;
+    }, 1000);
+  }
+
+  document.querySelector('[data-autogo-cancel]').addEventListener('click', function () {
+    // Deliberate opt-out: don't re-arm on later picks, or it fights the user.
+    autoCancelled = true;
+    stopAutoAdvance();
+  });
 
   function setStatus(id, text, tone) {
     var el = document.querySelector('[data-status="' + id + '"]');

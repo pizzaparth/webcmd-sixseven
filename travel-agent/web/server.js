@@ -15,6 +15,7 @@
 // written to disk.
 
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,17 +35,35 @@ const OUTPUT_DIR = path.resolve(__dirname, '../output');
 const SAMPLE_FILE = path.join(__dirname, 'fixtures/sample-trip.json');
 
 function parseArgs(argv) {
-  const opts = { file: null, port: 4173, open: true };
+  const opts = { file: null, port: 4173, open: true, launch: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--port') opts.port = Number(argv[++i]);
     else if (a === '--no-open') opts.open = false;
+    else if (a === '--no-launch') opts.launch = false;
     else if (a === '--help' || a === '-h') {
-      console.log('Usage: node web/server.js [trip.json] [--port N] [--no-open]');
+      console.log('Usage: node web/server.js [trip.json] [--port N] [--no-open] [--no-launch]');
+      console.log('  --no-open    do not use webcmd to open picks (open them in this browser instead)');
+      console.log('  --no-launch  do not open the comparison page in your browser on startup');
       process.exit(0);
     } else if (!a.startsWith('-')) opts.file = a;
   }
   return opts;
+}
+
+/** Opens `url` in the machine's default browser. Best-effort: never throws. */
+function openInBrowser(url) {
+  const [cmd, args] =
+    process.platform === 'win32'
+      ? ['cmd', ['/c', 'start', '', url]]
+      : process.platform === 'darwin'
+        ? ['open', [url]]
+        : ['xdg-open', [url]];
+  try {
+    spawn(cmd, args, { stdio: 'ignore', detached: true }).unref();
+  } catch {
+    // Headless box or no handler registered — the URL is printed either way.
+  }
 }
 
 /** Newest output/*.json, else the bundled sample. */
@@ -274,7 +293,8 @@ async function main() {
     console.log(`  Voice agent: browser Web Speech${voice.cloud ? ` + cloud (stt ${voice.stt || '-'}, tts ${voice.tts || '-'}, llm ${voice.llm || '-'})` : ' only — no cloud keys in ' + path.relative(process.cwd(), ENV_FILE) + ' (see VOICE.md)'}`);
     if (envInfo.loaded && envInfo.keys.length) console.log(`  Loaded ${envInfo.keys.length} variable(s) from ${path.relative(process.cwd(), ENV_FILE)}`);
     console.log(`  WhatsApp: ${whatsapp.enabled ? `webhook at ${baseUrl}/webhooks/whatsapp (number id ${whatsapp.phoneNumberId}, signature check ${whatsapp.signatureCheck ? 'on' : 'OFF'}, search ${webcmdOk ? 'live via webcmd' : 'snapshot from trip file'})` : 'off — set WHATSAPP_* in .env (see WHATSAPP.md)'}`);
-    console.log(`  Compare page: http://127.0.0.1:${opts.port}/`);
+    console.log(`  Compare page: http://127.0.0.1:${opts.port}/${opts.launch ? ' (opening in your browser…)' : ''}`);
+    if (opts.launch) openInBrowser(`http://127.0.0.1:${opts.port}/`);
   });
 }
 
