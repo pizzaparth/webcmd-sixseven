@@ -1,0 +1,17 @@
+{
+  "name": "travel-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hackathon travel concierge agent. Uses the webcmd CLI to search real travel sites, leaves a tab open per pick, logs a CLI comparison table, and writes trip data to JSON for the website team.",
+  "bin": {
+    "travel-agent": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dry-run": "node src/index.js --dry-run"
+  },
+  "engines": {
+    "node": ">=20.6.0"
+  }
+}

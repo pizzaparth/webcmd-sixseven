@@ -37,6 +37,9 @@ sitemaps/
 *.db
 autoresearch-results.tsv
 
+# Travel Concierge Agent (hackathon project) — generated trip data
+travel-agent/output/*.json
+
 # webcmd benchmarks (dataset comparison harness)
 benchmarks/results/
 benchmarks/.venv/

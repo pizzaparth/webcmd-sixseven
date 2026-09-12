@@ -1,5 +1,11 @@
 # Travel Concierge Agent — Search, Compare, Voice-Fill, Dummy Checkout
 
+> **Status:** the agent (search + open tabs + CLI comparison table +
+> `output/<trip>.json`) lives in [`travel-agent/`](travel-agent/README.md).
+> The comparison webpage, the combined details+payment page, and the voice
+> agent described below are the website side of the project and read that
+> JSON file — not yet built here.
+
 ## The Idea
 
 A CLI-driven browser agent (built on Webcmd) that takes one plain-language
