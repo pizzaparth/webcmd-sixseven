@@ -10,7 +10,9 @@
   "scripts": {
     "agent": "node src/run-agent.js",
     "start": "node src/index.js",
-    "dry-run": "node src/index.js --dry-run"
+    "dry-run": "node src/index.js --dry-run",
+    "web": "node web/server.js",
+    "web:build": "node web/build.js"
   },
   "engines": {
     "node": ">=20.6.0"
