@@ -229,7 +229,21 @@ What the page does:
 - **Your picks** — selections live in server memory for the run
   (`GET /api/picks`) so the details+payment and summary pages can read them;
   nothing is written to disk.
-- `/summary` is a placeholder on the same template until that page is built.
+- **Summary page** (`/summary`, `web/summary.js`) — the picks (with the
+  webcmd Session each one opened), the dummy payment's fake confirmation,
+  every Session the search run left open (with links and session ids), and
+  the places shortlist.
+
+### Shared design template (`web/template.js`)
+
+All three pages render through `renderPage()` and the class set in
+`template.js` — there is no per-page CSS. It encodes plan.md's rules: dark
+theme, flat solid colors, one amber accent, no gradients, no translucent
+pill badges, and every badge/text pair checked for contrast (all pairs pass
+WCAG AA; the lowest is 5.05:1). To add a page, write markup against the
+existing classes (`.card`, `.badge.ok|warn|bad|info|neutral|accent`,
+`.btn[.secondary][.block]`, `.banner`, `.grid`, `.field`, `.tabs`, `.kv`,
+`.notice`, `.status`, `.table-wrap`) and pass it to `renderPage()`.
 
 ### Details + dummy payment page (`/checkout`, `web/checkout.js`)
 
@@ -256,7 +270,7 @@ banner's best total if nothing was picked).
   first time; if the API is missing it says so and you fill by hand.
 
 `node web/build.js output/<trip>.json` writes standalone
-`output/<trip>.html` + `output/<trip>.checkout.html` instead (no server;
+`output/<trip>.html` + `.checkout.html` + `.summary.html` instead (no server;
 buttons open URLs directly, picks pass between pages via `sessionStorage`).
 `web/fixtures/sample-trip.json` is a hand-written example of the output
 schema below, used when `output/` is empty so the page can be demoed

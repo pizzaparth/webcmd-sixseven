@@ -2,11 +2,11 @@
 
 > **Status:** the agent (search + open tabs + CLI comparison table +
 > `output/<trip>.json`) lives in [`travel-agent/`](travel-agent/README.md).
-> The shared dark-theme template, the **price comparison page**, and the
+> The website side — shared dark-theme template, **price comparison page**,
 > **combined details + dummy payment page** (with the Web Speech voice
-> agent) are built in [`travel-agent/web/`](travel-agent/web/)
-> (`node web/server.js`) and read that JSON file. The summary page is not
-> yet built.
+> agent), and **summary page** — is built in
+> [`travel-agent/web/`](travel-agent/web/) (`node web/server.js`) and reads
+> that JSON file.
 
 ## The Idea
 

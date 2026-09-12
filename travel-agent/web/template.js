@@ -3,9 +3,19 @@
 // small component set, so each page consumes it instead of carrying its own
 // CSS — see ../../plan.md → "Design Template".
 //
-// Rules baked in here: dark theme, no gradients, no translucent "pill"
-// badges, and every badge's text color is chosen against its own solid
-// background (never the same hue as the background or border).
+// Rules baked in here (plan.md → "Design Template"):
+//   - Dark theme only: --bg / --surface / --surface-2 with light --text.
+//   - No gradients anywhere. Flat solid colors only.
+//   - No translucent "pill" badges: .badge is a solid bg + 4px radius.
+//   - Every text/background pair is checked for contrast — all pairs below
+//     pass WCAG AA (≥ 4.5:1; lowest is badge ok at 5.05:1). Badge text is
+//     always white or --accent-text on a solid tone, never the tone's hue.
+//   - One accent (--accent, amber) for buttons and links; dark text on it.
+//
+// Pages call renderPage() with a body string and use the classes here
+// (.card, .badge.<tone>, .btn[.secondary][.block], .banner, .grid, .row,
+// .field, .tabs, .kv, .notice, .status, .table-wrap). Adding a new page
+// means writing markup against these classes, not new CSS.
 
 export function esc(value) {
   return String(value ?? '')

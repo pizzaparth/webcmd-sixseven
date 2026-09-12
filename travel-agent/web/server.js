@@ -20,7 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderComparisonPage } from './compare.js';
 import { renderCheckoutPage } from './checkout.js';
-import { renderPage } from './template.js';
+import { renderSummaryPage } from './summary.js';
 import { createSession, browserRun, ensureProfile } from '../src/lib/webcmd.js';
 import { gotoScript } from '../src/lib/scripts.js';
 
@@ -81,14 +81,6 @@ async function readBody(req) {
   return text ? JSON.parse(text) : {};
 }
 
-function placeholderPage(title, activeNav) {
-  return renderPage({
-    title,
-    activeNav,
-    body: `<h1>${title}</h1><p class="sub">Not built yet — see <span class="mono">plan.md</span>.</p>
-      <a class="btn secondary" href="/">Back to comparison</a>`,
-  });
-}
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
@@ -180,7 +172,10 @@ async function main() {
         return json(res, 200, { ok: true, confirmation });
       }
       if (req.method === 'GET' && url.pathname === '/api/confirm') return json(res, 200, { confirmation });
-      if (req.method === 'GET' && url.pathname === '/summary') return html(res, 200, placeholderPage('Summary', 'summary'));
+      if (req.method === 'GET' && url.pathname === '/summary') {
+        const trip = await loadTrip(file);
+        return html(res, 200, renderSummaryPage(trip, { mode: 'server', picks: Object.fromEntries(picks), confirmation }));
+      }
       return json(res, 404, { ok: false, error: 'Not found' });
     } catch (err) {
       console.error(`[${req.method} ${url.pathname}]`, err);
