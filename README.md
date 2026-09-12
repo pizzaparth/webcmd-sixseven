@@ -2,6 +2,14 @@
 
 # Travel Concierge Agent
 
+**SLAB Hackathon Contributors**
+
+| Name | Registration Number |
+| --- | --- |
+| Parth Pancholi | 25BCE10443 |
+| Adarsh Pratap Singh | 25BCE10285 |
+| Disha Dashore | 25BAI10444 |
+
 Booking a trip means visiting a different site for flights, trains, cabs,
 and hotels, comparing prices manually across tabs, then entering the same
 name, contact, and payment details on every single site before you can pay.
